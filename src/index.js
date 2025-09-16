@@ -1,9 +1,11 @@
-/**
- * @file Main entry point for the zustand-store-manager package.
- * This is the primary export file that makes all functionality available
- * to consumers of the package.
- * @author Alan Chen
- */
+// Core Client & Manager
+export {createApiClient, ApiError} from './libraries/ApiClient';
+export {manager as apiManager} from './services/ApiManager';
 
-export {default} from './hooks/useApi';
-// export {default} from './services/ApiManager';
+// Core Hooks
+export {useApiBase} from './hooks/useApiBase';
+export {useScreenFocus} from './hooks/useScreenFocus';
+export {useParallelApi} from './hooks/useParallelApi';
+
+// Main Project-Facing Hook (aliased for convenience)
+export {useApiNavigation as useApi} from './hooks/useApiNavigation';

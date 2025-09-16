@@ -1,73 +1,66 @@
 import {useState, useRef, useEffect, useCallback} from 'react';
 
 /**
- * A unified and flexible hook for handling API requests, local state, and global store synchronization.
+ * A unified and flexible base hook for handling API requests.
  * @param {object} options - The configuration options for the hook.
  * @param {object} options.apiManager - A required instance of your API client.
  * @returns {object} The API state and methods.
  */
-export const useApi = (options = {}) => {
-  // Ensure apiManager is provided
+export const useApiBase = (options = {}) => {
   if (!options.apiManager) {
-    throw new Error('useApi requires an `apiManager` instance to be provided in the options.');
+    throw new Error('useApiBase requires an `apiManager` instance to be provided in the options.');
   }
 
   const settings = {
-    // --- Core ---
     uri: '',
     initialParams: {},
-    // --- Global Store ---
     globalStore: null,
     dataPath: '',
-    // --- Triggers ---
     runOnMount: false,
     alwaysRunOnMount: false,
     runOnFocus: false,
     runOnParamsChange: false,
     refreshDependencies: [],
-    // --- Lifecycle & Validation ---
     validateParams: () => true,
     abortOnUnmount: true,
     abortOnBlur: true,
-    // --- Data Transformation ---
     filterParams: params => params,
     filterResponse: data => data,
-    // --- Callbacks ---
     onSubmit: () => {},
     onSuccess: () => {},
     onError: () => {},
     onCompleted: () => {},
     onRefresh: () => {},
-    // --- Pagination ---
     pagination: null,
     ...options,
   };
 
-  // --- State Management ---
   const [params, setParams] = useState(settings.initialParams);
   const [error, setError] = useState(null);
-  const [errorMessage, setErrorMessage] = useState('');
   const [loadingStates, setLoadingStates] = useState({
     isInitialLoading: settings.runOnMount,
     isRefreshing: false,
     isLoadingMore: false,
   });
 
-  // --- Refs ---
-  const apiRequest = useRef(settings.apiManager); // Use the injected manager
+  const apiClient = useRef(settings.apiManager);
   const lastFetchTimestamp = useRef(0);
   const hasFetchedOnce = useRef(false);
   const isMounted = useRef(true);
   const debounceTimer = useRef(null);
   const previousParams = useRef(params);
 
-  // --- Global Store Integration ---
   const localResponseState = useState(settings.pagination ? {results: []} : null);
   const hasGlobalStore = !!(settings.globalStore && settings.dataPath);
   const response = hasGlobalStore ? settings.globalStore.use(settings.dataPath) : localResponseState[0];
-  const setResponse = hasGlobalStore
-    ? (value, ...args) => settings.globalStore.update(settings.dataPath, value, ...args)
-    : localResponseState[1];
+  const setResponse = hasGlobalStore ? value => settings.globalStore.update(settings.dataPath, value) : localResponseState[1];
+
+  useEffect(() => {
+    isMounted.current = true;
+    return () => {
+      isMounted.current = false;
+    };
+  }, []);
 
   useEffect(() => {
     if (hasGlobalStore) {
@@ -78,7 +71,6 @@ export const useApi = (options = {}) => {
     }
   }, [hasGlobalStore, settings.globalStore, settings.dataPath]);
 
-  // --- Core Request Logic ---
   const send = useCallback(
     async (mode = 'initial', oneTimeParams = {}) => {
       if (loadingStates.isInitialLoading || loadingStates.isRefreshing) {
@@ -92,11 +84,11 @@ export const useApi = (options = {}) => {
         isLoadingMore: mode === 'pagination',
       }));
       setError(null);
-      setErrorMessage('');
 
       const currentParams = {...params, ...oneTimeParams};
       if (mode === 'pagination' && settings.pagination) {
-        const page = (hasGlobalStore ? settings.globalStore.get(settings.dataPath)?.metadata?.page : response?.metadata?.page) || 0;
+        const currentResponse = hasGlobalStore ? settings.globalStore.get(settings.dataPath) : response;
+        const page = currentResponse?.metadata?.page || 0;
         currentParams.page = page + 1;
       }
       const finalParams = settings.filterParams(currentParams);
@@ -109,17 +101,12 @@ export const useApi = (options = {}) => {
       await settings.onSubmit();
       if (mode === 'refresh') await settings.onRefresh();
 
-      const apiResponse = await apiRequest.current.sendJson(settings.uri, finalParams);
+      try {
+        const apiResponse = await apiClient.current.request(`post:${settings.uri}`, {body: finalParams});
 
-      if (!isMounted.current) return;
+        if (!isMounted.current || apiResponse === null) return;
 
-      if (!apiResponse || !apiResponse.success) {
-        const err = apiResponse?.data || {message: 'An unknown error occurred.'};
-        setError(err);
-        setErrorMessage(err.message);
-        await settings.onError(err);
-      } else {
-        const filteredData = settings.filterResponse(apiResponse.data);
+        const filteredData = settings.filterResponse(apiResponse);
         lastFetchTimestamp.current = Date.now();
         hasFetchedOnce.current = true;
 
@@ -134,74 +121,57 @@ export const useApi = (options = {}) => {
         }
 
         await settings.onSuccess(filteredData, finalParams);
+      } catch (err) {
+        if (isMounted.current) setError(err);
+        await settings.onError(err);
+      } finally {
+        if (isMounted.current) {
+          setLoadingStates({isInitialLoading: false, isRefreshing: false, isLoadingMore: false});
+          await settings.onCompleted();
+        }
       }
-
-      setLoadingStates({isInitialLoading: false, isRefreshing: false, isLoadingMore: false});
-      await settings.onCompleted();
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [params, settings.uri, hasGlobalStore, response],
+    [params, settings, hasGlobalStore, response, loadingStates, setResponse],
   );
 
-  // (The rest of the useEffects and callbacks remain the same as the previous version)
+  useEffect(() => {
+    if (settings.abortOnUnmount) {
+      const client = apiClient.current;
+      return () => client.abort();
+    }
+  }, [settings.abortOnUnmount]);
 
-  // --- Lifecycle Effects ---
-
-  // Handle runOnMount
   useEffect(() => {
     const shouldFetch = settings.runOnMount && (!hasFetchedOnce.current || settings.alwaysRunOnMount);
     if (shouldFetch) {
       const existingData = hasGlobalStore ? settings.globalStore.get(settings.dataPath) : null;
-      if (existingData && !settings.alwaysRunOnMount) {
-        return; // Data already exists, don't fetch
+      if (!existingData || settings.alwaysRunOnMount) {
+        send('initial');
       }
-      send('initial');
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [settings.runOnMount, settings.alwaysRunOnMount]);
+  }, [settings.runOnMount, settings.alwaysRunOnMount, send, hasGlobalStore, settings.globalStore, settings.dataPath]);
 
-  // Handle component unmount
-  useEffect(() => {
-    isMounted.current = true;
-    return () => {
-      isMounted.current = false;
-      if (settings.abortOnUnmount) {
-        apiRequest.current.abort();
-      }
-    };
-  }, [settings.abortOnUnmount]);
-
-  // Handle refreshDependencies
   useEffect(() => {
     if (hasFetchedOnce.current) {
       send('refresh');
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, settings.refreshDependencies);
+  }, [send, settings.refreshDependencies]);
 
-  // Handle runOnParamsChange (with debouncing)
   useEffect(() => {
-    if (!settings.runOnParamsChange || !hasFetchedOnce.current) {
-      return;
-    }
-    if (JSON.stringify(params) === JSON.stringify(previousParams.current)) {
-      return;
-    }
+    if (!settings.runOnParamsChange || !hasFetchedOnce.current) return;
+    if (JSON.stringify(params) === JSON.stringify(previousParams.current)) return;
     previousParams.current = params;
 
     if (typeof settings.runOnParamsChange === 'number') {
       if (debounceTimer.current) clearTimeout(debounceTimer.current);
-      debounceTimer.current = setTimeout(() => {
-        send('refresh');
-      }, settings.runOnParamsChange);
+      debounceTimer.current = setTimeout(() => send('refresh'), settings.runOnParamsChange);
     } else {
       send('refresh');
     }
   }, [params, settings.runOnParamsChange, send]);
 
-  // --- Public API ---
-
   const refresh = useCallback(() => send('refresh'), [send]);
+
   const loadMore = useCallback(() => {
     const currentResponse = hasGlobalStore ? settings.globalStore.get(settings.dataPath) : response;
     if (settings.pagination && currentResponse?.metadata?.hasMore) {
@@ -209,37 +179,27 @@ export const useApi = (options = {}) => {
     }
   }, [send, settings.pagination, response, hasGlobalStore, settings.globalStore, settings.dataPath]);
 
-  const updateParams = useCallback(updates => {
-    setParams(prev => ({...prev, ...updates}));
-  }, []);
-
-  const handleOnChange = useCallback(
-    key => newValue => {
-      setParams(prev => ({...prev, [key]: newValue}));
-    },
-    [],
-  );
+  const updateParams = useCallback(updates => setParams(prev => ({...prev, ...updates})), []);
+  const handleOnChange = useCallback(key => value => setParams(prev => ({...prev, [key]: value})), []);
 
   const focus = useCallback(() => {
     if (!settings.runOnFocus) return;
     if (settings.runOnFocus === 'once' && hasFetchedOnce.current) return;
     if (typeof settings.runOnFocus === 'number') {
-      const staleTime = settings.runOnFocus * 1000;
-      if (Date.now() - lastFetchTimestamp.current < staleTime) return;
+      if (Date.now() - lastFetchTimestamp.current < settings.runOnFocus * 1000) return;
     }
     refresh();
   }, [settings.runOnFocus, refresh]);
 
   const blur = useCallback(() => {
     if (settings.abortOnBlur) {
-      apiRequest.current.abort();
+      apiClient.current.abort();
     }
   }, [settings.abortOnBlur]);
 
   return {
     response,
     error,
-    errorMessage,
     params,
     hasMore: (hasGlobalStore ? settings.globalStore.get(settings.dataPath)?.metadata?.hasMore : response?.metadata?.hasMore) ?? false,
     isLoading: loadingStates.isInitialLoading || loadingStates.isRefreshing || loadingStates.isLoadingMore,
@@ -257,5 +217,3 @@ export const useApi = (options = {}) => {
     blur,
   };
 };
-
-export default useApi;
