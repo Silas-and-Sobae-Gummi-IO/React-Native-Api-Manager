@@ -1,0 +1,7 @@
+# .prettierignore
+
+# Ignore everything in the root directory
+/*
+
+# But do not ignore the contents of the src directory
+!/src

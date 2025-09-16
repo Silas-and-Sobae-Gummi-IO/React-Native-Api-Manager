@@ -1,0 +1,50 @@
+{
+  "name": "@gummi-io/api-manager",
+  "version": "1.0.0",
+  "description": "A centralized, fluent api manager",
+  "main": "dist/index.js",
+  "module": "dist/index.mjs",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup src/index.js --format cjs,esm --dts",
+    "test": "jest",
+    "fix": "eslint . --fix",
+    "format": "prettier --write ."
+  },
+  "keywords": [
+    "zustand",
+    "react",
+    "react-native",
+    "state-management",
+    "mmkv",
+    "asyncstorage"
+  ],
+  "author": "gummi-io",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Silas-and-Sobae-Gummi-IO/React-Native-Api-Manager.git"
+  },
+  "peerDependencies": {
+    "react": ">=18.0.0"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.28.4",
+    "@eslint/js": "^9.35.0",
+    "@react-native/babel-preset": "^0.81.1",
+    "@testing-library/react-native": "^13.3.3",
+    "eslint": "^9.35.0",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-react-hooks": "^5.2.0",
+    "jest": "^30.1.3",
+    "prettier": "^3.6.2",
+    "react": ">=18.0.0",
+    "react-native": "^0.81.4",
+    "react-test-renderer": "^19.1.1",
+    "tsup": "^8.5.0",
+    "typescript": "^5.9.2"
+  }
+}
