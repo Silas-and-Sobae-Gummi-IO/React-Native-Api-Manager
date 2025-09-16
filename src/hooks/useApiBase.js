@@ -1,9 +1,8 @@
-import {useState, useRef, useEffect, useCallback} from 'react';
+import {useState, useRef, useEffect, useCallback, useMemo} from 'react';
 
 /**
  * A unified and flexible base hook for handling API requests.
  * @param {object} options - The configuration options for the hook.
- * @param {object} options.apiManager - A required instance of your API client.
  * @returns {object} The API state and methods.
  */
 export const useApiBase = (options = {}) => {
@@ -11,31 +10,36 @@ export const useApiBase = (options = {}) => {
     throw new Error('useApiBase requires an `apiManager` instance to be provided in the options.');
   }
 
-  const settings = {
-    uri: '',
-    initialParams: {},
-    globalStore: null,
-    dataPath: '',
-    runOnMount: false,
-    alwaysRunOnMount: false,
-    runOnFocus: false,
-    runOnParamsChange: false,
-    refreshDependencies: [],
-    validateParams: () => true,
-    abortOnUnmount: true,
-    abortOnBlur: true,
-    filterParams: params => params,
-    filterResponse: data => data,
-    onSubmit: () => {},
-    onSuccess: () => {},
-    onError: () => {},
-    onCompleted: () => {},
-    onRefresh: () => {},
-    pagination: null,
-    ...options,
-  };
+  // Memoize the settings object to prevent re-renders from causing dependency changes.
+  const settings = useMemo(
+    () => ({
+      uri: '',
+      initialParams: {},
+      params: undefined, // Allow for controlled params
+      globalStore: null,
+      dataPath: '',
+      runOnMount: false,
+      alwaysRunOnMount: false,
+      runOnFocus: false,
+      runOnParamsChange: false,
+      refreshDependencies: [],
+      validateParams: () => true,
+      abortOnUnmount: true,
+      abortOnBlur: true,
+      filterParams: params => params,
+      filterResponse: data => data,
+      onSubmit: () => {},
+      onSuccess: () => {},
+      onError: () => {},
+      onCompleted: () => {},
+      onRefresh: () => {},
+      pagination: null,
+      ...options,
+    }),
+    [options],
+  );
 
-  const [params, setParams] = useState(settings.initialParams);
+  const [params, setParams] = useState(settings.initialParams || settings.params);
   const [error, setError] = useState(null);
   const [loadingStates, setLoadingStates] = useState({
     isInitialLoading: settings.runOnMount,
@@ -52,8 +56,24 @@ export const useApiBase = (options = {}) => {
 
   const localResponseState = useState(settings.pagination ? {results: []} : null);
   const hasGlobalStore = !!(settings.globalStore && settings.dataPath);
-  const response = hasGlobalStore ? settings.globalStore.use(settings.dataPath) : localResponseState[0];
-  const setResponse = hasGlobalStore ? value => settings.globalStore.update(settings.dataPath, value) : localResponseState[1];
+
+  const response = useMemo(
+    () => (hasGlobalStore ? settings.globalStore.use(settings.dataPath) : localResponseState[0]),
+    [hasGlobalStore, settings.globalStore, settings.dataPath, localResponseState],
+  );
+
+  const setResponse = useCallback(
+    value => (hasGlobalStore ? settings.globalStore.update(settings.dataPath, value) : localResponseState[1](value)),
+    [hasGlobalStore, settings.globalStore, settings.dataPath, localResponseState],
+  );
+
+  // Effect to sync internal params state if `params` prop is provided (controlled hook).
+  const paramsPropString = useMemo(() => JSON.stringify(settings.params), [settings.params]);
+  useEffect(() => {
+    if (settings.params) {
+      setParams(settings.params);
+    }
+  }, [paramsPropString, settings.params]);
 
   useEffect(() => {
     isMounted.current = true;
@@ -102,9 +122,10 @@ export const useApiBase = (options = {}) => {
       if (mode === 'refresh') await settings.onRefresh();
 
       try {
+        // NOTE: Defaulting to `post` for data submission. Change if your API uses GET for queries with bodies.
         const apiResponse = await apiClient.current.request(`post:${settings.uri}`, {body: finalParams});
 
-        if (!isMounted.current || apiResponse === null) return;
+        if (!isMounted.current || apiResponse === null) return; // Aborted or unmounted
 
         const filteredData = settings.filterResponse(apiResponse);
         lastFetchTimestamp.current = Date.now();
@@ -151,23 +172,21 @@ export const useApiBase = (options = {}) => {
     }
   }, [settings.runOnMount, settings.alwaysRunOnMount, send, hasGlobalStore, settings.globalStore, settings.dataPath]);
 
+  const refreshDependencyKey = useMemo(() => JSON.stringify(settings.refreshDependencies), [settings.refreshDependencies]);
   useEffect(() => {
-    if (hasFetchedOnce.current) {
+    if (hasFetchedOnce.current && settings.refreshDependencies.length > 0) {
       send('refresh');
     }
-  }, [send, settings.refreshDependencies]);
+  }, [send, refreshDependencyKey]);
 
   useEffect(() => {
     if (!settings.runOnParamsChange || !hasFetchedOnce.current) return;
     if (JSON.stringify(params) === JSON.stringify(previousParams.current)) return;
     previousParams.current = params;
 
-    if (typeof settings.runOnParamsChange === 'number') {
-      if (debounceTimer.current) clearTimeout(debounceTimer.current);
-      debounceTimer.current = setTimeout(() => send('refresh'), settings.runOnParamsChange);
-    } else {
-      send('refresh');
-    }
+    const debounceMs = typeof settings.runOnParamsChange === 'number' ? settings.runOnParamsChange : 300;
+    if (debounceTimer.current) clearTimeout(debounceTimer.current);
+    debounceTimer.current = setTimeout(() => send('refresh'), debounceMs);
   }, [params, settings.runOnParamsChange, send]);
 
   const refresh = useCallback(() => send('refresh'), [send]);

@@ -20,6 +20,7 @@ export const useParallelApi = (apiClient, requests = []) => {
   }, []);
 
   useEffect(() => {
+    // Stringify the requests to create a stable dependency for the effect hook.
     const requestKey = JSON.stringify(requests);
 
     const fetchData = async () => {
