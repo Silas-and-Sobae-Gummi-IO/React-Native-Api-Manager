@@ -123,7 +123,8 @@ export const useApiBase = (options = {}) => {
 
       try {
         // NOTE: Defaulting to `post` for data submission. Change if your API uses GET for queries with bodies.
-        const apiResponse = await apiClient.current.request(`post:${settings.uri}`, {body: finalParams});
+        const finalUri = settings.uri.includes(':') ? settings.uri : `post:${settings.uri}`;
+        const apiResponse = await apiClient.current.request(finalUri, {body: finalParams});
 
         if (!isMounted.current || apiResponse === null) return; // Aborted or unmounted
 

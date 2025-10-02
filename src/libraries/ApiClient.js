@@ -1,13 +1,13 @@
 /**
  * Custom error class for API-related errors with structured information.
- * 
+ *
  * @class ApiError
  * @extends {Error}
  */
 export class ApiError extends Error {
   /**
    * Creates an instance of ApiError.
-   * 
+   *
    * @param {string} message - The error message
    * @param {number} status - The HTTP status code
    * @param {any} data - The parsed JSON error response from the server
@@ -23,14 +23,14 @@ export class ApiError extends Error {
 /**
  * Safely parses JSON response with fallback extraction for malformed JSON.
  * First attempts normal parsing, then tries to extract JSON from mixed content.
- * 
+ *
  * @param {string} responseBody - The raw text from the response
  * @returns {any} The parsed JSON data or null if empty
  * @throws {Error} Original parse error if all attempts fail
  */
-const parseJsonSafely = (responseBody) => {
+const parseJsonSafely = responseBody => {
   if (!responseBody) return null;
-  
+
   try {
     return JSON.parse(responseBody);
   } catch (parseError) {
@@ -38,7 +38,7 @@ const parseJsonSafely = (responseBody) => {
     try {
       const openBraceIndex = responseBody.indexOf('{');
       const openBracketIndex = responseBody.indexOf('[');
-      
+
       // Find the first occurrence of JSON start
       let startIndex = -1;
       if (openBraceIndex === -1) {
@@ -48,16 +48,16 @@ const parseJsonSafely = (responseBody) => {
       } else {
         startIndex = Math.min(openBraceIndex, openBracketIndex);
       }
-      
+
       if (startIndex === -1) throw parseError;
-      
+
       // Find the last occurrence of JSON end
       const closeBraceIndex = responseBody.lastIndexOf('}');
       const closeBracketIndex = responseBody.lastIndexOf(']');
       const endIndex = Math.max(closeBraceIndex, closeBracketIndex);
-      
+
       if (endIndex === -1) throw parseError;
-      
+
       const extractedJson = responseBody.substring(startIndex, endIndex + 1);
       return JSON.parse(extractedJson);
     } catch {
@@ -69,34 +69,34 @@ const parseJsonSafely = (responseBody) => {
 /**
  * Parses a URI string that may contain a method prefix (e.g., 'post:users').
  * Supports standard HTTP methods and handles edge cases like URLs with colons.
- * 
+ *
  * @param {string} uri - The URI string, optionally prefixed with method
  * @param {string} [defaultMethod='GET'] - The default HTTP method to use
  * @returns {{method: string, endpoint: string}} Parsed method and endpoint
  */
 const parseUriAndMethod = (uri, defaultMethod = 'GET') => {
   const VALID_HTTP_METHODS = ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'HEAD', 'OPTIONS'];
-  
+
   if (!uri.includes(':')) {
-    return { method: defaultMethod.toUpperCase(), endpoint: uri };
+    return {method: defaultMethod.toUpperCase(), endpoint: uri};
   }
-  
+
   const [methodCandidate, ...endpointParts] = uri.split(':');
   const upperCaseMethod = methodCandidate.toUpperCase();
-  
+
   if (VALID_HTTP_METHODS.includes(upperCaseMethod)) {
     return {
       method: upperCaseMethod,
-      endpoint: endpointParts.join(':')
+      endpoint: endpointParts.join(':'),
     };
   }
-  
-  return { method: defaultMethod.toUpperCase(), endpoint: uri };
+
+  return {method: defaultMethod.toUpperCase(), endpoint: uri};
 };
 
 /**
  * Creates a configured instance of the API Client with fetch-based HTTP functionality.
- * 
+ *
  * @param {Object} config - Configuration object for the API client
  * @param {string} config.baseUrl - Base URL for all requests
  * @param {Object} [config.headers] - Default headers to include with requests
@@ -115,7 +115,7 @@ export const createApiClient = (config = {}) => {
 
   /**
    * Builds the full URL by combining base URL and endpoint.
-   * 
+   *
    * @param {string} baseUrl - The base URL
    * @param {string} endpoint - The endpoint path
    * @returns {string} The full URL with normalized slashes
@@ -126,7 +126,7 @@ export const createApiClient = (config = {}) => {
 
   /**
    * Builds request headers from various sources.
-   * 
+   *
    * @param {Object} config - API client configuration
    * @param {Object} requestOptions - Request-specific options
    * @param {Map} dynamicHeadersMap - Dynamic headers map
@@ -134,12 +134,12 @@ export const createApiClient = (config = {}) => {
    */
   const buildRequestHeaders = async (config, requestOptions, dynamicHeadersMap) => {
     const headers = new Headers(config.headers || {});
-    
+
     // Set default content type for non-FormData requests
     if (!(requestOptions.body instanceof FormData)) {
       headers.set('Content-Type', 'application/json');
     }
-    
+
     // Add dynamic headers from configuration
     if (config.getDynamicHeaders) {
       const configDynamicHeaders = await config.getDynamicHeaders();
@@ -147,47 +147,47 @@ export const createApiClient = (config = {}) => {
         headers.set(key, value);
       });
     }
-    
+
     // Add runtime dynamic headers
     dynamicHeadersMap.forEach((value, key) => {
       headers.set(key, value);
     });
-    
+
     // Add request-specific headers
     if (requestOptions.headers) {
       Object.entries(requestOptions.headers).forEach(([key, value]) => {
         headers.set(key, value);
       });
     }
-    
+
     // Remove content-type for FormData to let browser set it with boundary
     if (requestOptions.body instanceof FormData) {
       headers.delete('Content-Type');
     }
-    
+
     return headers;
   };
 
   /**
    * Internal function to send HTTP requests with full interceptor support.
-   * 
+   *
    * @param {string} uri - The URI to send the request to
    * @param {Object} requestOptions - Options for the request
    * @returns {Promise<any>} The response data
    */
   const sendRequest = async (uri, requestOptions = {}) => {
-    const requestContext = { uri, options: requestOptions };
+    const requestContext = {uri, options: requestOptions};
 
     try {
-      const { method, endpoint } = parseUriAndMethod(uri, requestOptions.method);
+      const {method, endpoint} = parseUriAndMethod(uri, requestOptions.method);
       const fullUrl = buildFullUrl(config.baseUrl, endpoint);
       const requestHeaders = await buildRequestHeaders(config, requestOptions, dynamicHeaders);
-      
+
       let fetchOptions = {
         ...requestOptions,
         method,
         headers: requestHeaders,
-        signal: abortController.signal
+        signal: abortController.signal,
       };
 
       // Run request interceptors
@@ -200,29 +200,25 @@ export const createApiClient = (config = {}) => {
         if (result !== undefined) return result;
       }
 
+      if (['GET', 'HEAD'].includes(fetchOptions.method)) {
+        delete fetchOptions.body;
+      }
+
       // Make the HTTP request
       const response = await fetch(fullUrl, fetchOptions);
       const responseBodyText = await response.text();
-      
+
       // Parse response body
       let responseData;
       try {
         responseData = parseJsonSafely(responseBodyText);
       } catch (parseError) {
-        throw new ApiError(
-          'Invalid JSON response from server', 
-          response.status, 
-          responseBodyText
-        );
+        throw new ApiError('Invalid JSON response from server', response.status, responseBodyText);
       }
 
       // Check for HTTP errors
       if (!response.ok) {
-        throw new ApiError(
-          responseData?.message || `Request failed with status ${response.status}`, 
-          response.status, 
-          responseData
-        );
+        throw new ApiError(responseData?.message || `Request failed with status ${response.status}`, response.status, responseData);
       }
 
       // Run response interceptors
@@ -235,7 +231,6 @@ export const createApiClient = (config = {}) => {
       }
 
       return finalData;
-      
     } catch (error) {
       // Handle abort errors
       if (error.name === 'AbortError') {
@@ -246,7 +241,7 @@ export const createApiClient = (config = {}) => {
       if (config.interceptors?.onError) {
         return config.interceptors.onError(error);
       }
-      
+
       throw error;
     } finally {
       // Run finally interceptors
@@ -268,7 +263,7 @@ export const createApiClient = (config = {}) => {
 
     /**
      * Sets a dynamic header that will be included in all subsequent requests.
-     * 
+     *
      * @param {string} key - Header name
      * @param {string} value - Header value
      */
@@ -276,10 +271,10 @@ export const createApiClient = (config = {}) => {
 
     /**
      * Removes a dynamic header.
-     * 
+     *
      * @param {string} key - Header name to remove
      */
-    unsetHeader: (key) => dynamicHeaders.delete(key),
+    unsetHeader: key => dynamicHeaders.delete(key),
 
     /**
      * Clears all dynamic headers.
@@ -288,7 +283,7 @@ export const createApiClient = (config = {}) => {
 
     /**
      * Makes a generic HTTP request with the specified URI and options.
-     * 
+     *
      * @param {string} uri - The URI to request, optionally prefixed with method
      * @param {Object} [options={}] - Request options
      * @param {Object} [options.params] - Query parameters to append to URL
@@ -297,14 +292,14 @@ export const createApiClient = (config = {}) => {
      * @returns {Promise<any>} The response data
      */
     request: (uri, options = {}) => {
-      const { body, params, ...restOptions } = options;
+      const {body, params, ...restOptions} = options;
 
       let requestUri = uri;
-      
+
       // Add query parameters if provided
       if (params) {
         const queryString = new URLSearchParams(params).toString();
-        const { endpoint } = parseUriAndMethod(uri, options.method);
+        const {endpoint} = parseUriAndMethod(uri, options.method);
         const uriParts = uri.split(':');
         const methodPrefix = uriParts.length > 1 ? `${uriParts[0]}:` : '';
         requestUri = `${methodPrefix}${endpoint}?${queryString}`;
@@ -324,50 +319,46 @@ export const createApiClient = (config = {}) => {
 
     /**
      * Makes a GET request.
-     * 
+     *
      * @param {string} uri - The URI to request
      * @param {Object} [params] - Query parameters
      * @param {Object} [options] - Additional request options
      * @returns {Promise<any>} The response data
      */
-    get: (uri, params, options) => 
-      apiClient.request(uri, { params, ...options, method: 'GET' }),
+    get: (uri, params, options) => apiClient.request(uri, {params, ...options, method: 'GET'}),
 
     /**
      * Makes a POST request.
-     * 
+     *
      * @param {string} uri - The URI to request
      * @param {any} [body] - Request body data
      * @param {Object} [options] - Additional request options
      * @returns {Promise<any>} The response data
      */
-    post: (uri, body, options) => 
-      apiClient.request(uri, { body, ...options, method: 'POST' }),
+    post: (uri, body, options) => apiClient.request(uri, {body, ...options, method: 'POST'}),
 
     /**
      * Makes a PUT request.
-     * 
+     *
      * @param {string} uri - The URI to request
      * @param {any} [body] - Request body data
      * @param {Object} [options] - Additional request options
      * @returns {Promise<any>} The response data
      */
-    put: (uri, body, options) => 
-      apiClient.request(uri, { body, ...options, method: 'PUT' }),
+    put: (uri, body, options) => apiClient.request(uri, {body, ...options, method: 'PUT'}),
 
     /**
      * Makes a DELETE request.
-     * 
+     *
      * @param {string} uri - The URI to request
      * @param {Object} [options] - Additional request options
      * @returns {Promise<any>} The response data
      */
-    del: (uri, options) => 
-      apiClient.request(uri, { ...options, method: 'DELETE' }),
+    del: (uri, options) => apiClient.request(uri, {...options, method: 'DELETE'}),
 
     /**
      * Uploads files using FormData.
-     * 
+     *
      * @param {string} uri - The URI to upload to
      * @param {Object} data - Key-value pairs to include in FormData
      * @param {Object} [options] - Additional request options
@@ -378,12 +369,12 @@ export const createApiClient = (config = {}) => {
       Object.entries(data).forEach(([key, value]) => {
         formData.append(key, value);
       });
-      return apiClient.request(uri, { body: formData, ...options, method: 'POST' });
+      return apiClient.request(uri, {body: formData, ...options, method: 'POST'});
     },
 
     /**
      * Executes multiple requests in parallel using Promise.all.
-     * 
+     *
      * @param {Array<Object>} requests - Array of request configurations
      * @param {string} requests[].method - HTTP method (get, post, put, delete)
      * @param {string} requests[].uri - Request URI
@@ -391,21 +382,19 @@ export const createApiClient = (config = {}) => {
      * @param {any} [requests[].body] - Request body (for POST/PUT)
      * @returns {Promise<Array>} Array of response data in the same order as requests
      */
-    all: (requests) => {
-      const requestPromises = requests.map((requestConfig) => {
-        const { method = 'get', uri, ...requestOptions } = requestConfig;
+    all: requests => {
+      const requestPromises = requests.map(requestConfig => {
+        const {method = 'get', uri, ...requestOptions} = requestConfig;
         const lowerMethod = method.toLowerCase();
-        
+
         if (apiClient[lowerMethod]) {
           const payload = requestOptions.params || requestOptions.body;
           return apiClient[lowerMethod](uri, payload, requestOptions);
         }
-        
-        return Promise.reject(
-          new Error(`Invalid HTTP method '${method}' in parallel request configuration`)
-        );
+
+        return Promise.reject(new Error(`Invalid HTTP method '${method}' in parallel request configuration`));
       });
-      
+
       return Promise.all(requestPromises);
     },
   };
