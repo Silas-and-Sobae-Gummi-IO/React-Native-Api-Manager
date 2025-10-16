@@ -14,17 +14,14 @@ The suite is composed of three distinct but interconnected layers:
 
 To understand a specific part of the library, refer to the following specification and development plan documents:
 
-  * **For the low-level request client:**
+- **For the low-level request client:**
+  - `spec-api-client.md`: The detailed technical specification for the `ApiClient`.
+  - `tasks/tdd-plan-api-client.md`: The step-by-step TDD plan for building the `ApiClient`.
 
-      * `spec-api-client.md`: The detailed technical specification for the `ApiClient`.
-      * `tdd-plan-api-client.md`: The step-by-step TDD plan for building the `ApiClient`.
+- **For the high-level application service layer:**
+  - `spec-api-agent.md`: The detailed technical specification for the `ApiAgent`.
+  - `tasks/tdd-plan-api-agent.md`: The step-by-step TDD plan for building the `ApiAgent`.
 
-  * **For the high-level application service layer:**
-
-      * `spec-api-agent.md`: The detailed technical specification for the `ApiAgent`.
-      * `tdd-plan-api-agent.md`: The step-by-step TDD plan for building the `ApiAgent`.
-
-  * **For the React integration layer:**
-
-      * `spec-react-hooks.md`: The detailed technical specification for the unified `useApi` hook.
-      * `tdd-plan-react-hooks.md`: The step-by-step TDD plan for building the React hooks.
+- **For the React integration layer:**
+  - `spec-react-hooks.md`: The detailed technical specification for the unified `useApi` hook.
+  - `tasks/tdd-plan-react-hooks.md`: The step-by-step TDD plan for building the React hooks.

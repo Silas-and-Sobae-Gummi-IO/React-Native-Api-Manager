@@ -31,38 +31,38 @@ This phase focuses on pure, stateless helper functions. They are the easiest to 
 
 ### **Phase 2: Core Data Structures** 🏗️
 
-- `[ ]` **Module: `error.js`**
-  - `[ ]` Create the test file: `error.test.js`.
-  - `[ ]` **Test 1**: Write a test to ensure an `ApiError` instance correctly stores `status`, `response`, `requestConfig`, and a `message` passed to its constructor.
-  - `[ ]` **Implementation**: Create the `ApiError` class in `error.js`.
+- `[x]` **Module: `error.js`**
+  - `[x]` Create the test file: `error.test.js`.
+  - `[x]` **Test 1**: Write a test to ensure an `ApiError` instance correctly stores `status`, `response`, `requestConfig`, and a `message` passed to its constructor.
+  - `[x]` **Implementation**: Create the `ApiError` class in `error.js`.
 
-- `[ ]` **Module: `InterceptorManager.js`**
-  - `[ ]` Create the test file: `InterceptorManager.test.js`.
-  - `[ ]` **Test 1**: Test the `add` method and verify an interceptor is stored correctly.
-  - `[ ]` **Test 2**: Test that the `run` method executes interceptors in the correct priority order (lower numbers first).
-  - `[ ]` **Test 3**: Test that the `run` method correctly passes the modified data from one interceptor to the next in the chain.
-  - `[ ]` **Test 4**: Test the `remove` method.
-  - `[ ]` **Implementation**: Build the `InterceptorManager` class.
+- `[x]` **Module: `InterceptorManager.js`**
+  - `[x]` Create the test file: `InterceptorManager.test.js`.
+  - `[x]` **Test 1**: Test the `add` method and verify an interceptor is stored correctly.
+  - `[x]` **Test 2**: Test that the `run` method executes interceptors in the correct priority order (lower numbers first).
+  - `[x]` **Test 3**: Test that the `run` method correctly passes the modified data from one interceptor to the next in the chain.
+  - `[x]` **Test 4**: Test the `remove` method.
+  - `[x]` **Implementation**: Build the `InterceptorManager` class.
 
 ---
 
 ### **Phase 3: Request & Response Logic** ⚙️
 
-- `[ ]` **Module: `requestBuilder.js`**
-  - `[ ]` Create the test file: `requestBuilder.test.js`.
-  - `[ ]` **Test 1**: Test that it correctly combines a `baseURL` and a relative URL.
-  - `[ ]` **Test 2**: Test that it correctly attaches serialized query `params`.
-  - `[ ]` **Test 3**: Test that it `JSON.stringify`s an object body and sets the `Content-Type: application/json` header.
-  - `[ ]` **Test 4**: Test that it does **not** set `Content-Type` when the body is a `FormData` object, as the browser must do this.
-  - `[ ]` **Implementation**: Write the `requestBuilder.js` module.
+- `[x]` **Module: `requestBuilder.js`**
+  - `[x]` Create the test file: `requestBuilder.test.js`.
+  - `[x]` **Test 1**: Test that it correctly combines a `baseURL` and a relative URL.
+  - `[x]` **Test 2**: Test that it correctly attaches serialized query `params`.
+  - `[x]` **Test 3**: Test that it `JSON.stringify`s an object body and sets the `Content-Type: application/json` header.
+  - `[x]` **Test 4**: Test that it does **not** set `Content-Type` when the body is a `FormData` object, as the browser must do this.
+  - `[x]` **Implementation**: Write the `requestBuilder.js` module.
 
-- `[ ]` **Module: `responseParser.js`**
-  - `[ ]` Create the test file: `responseParser.test.js`.
-  - `[ ]` **Test 1**: Test that it correctly parses a successful JSON response.
-  - `[ ]` **Test 2**: Test that it **throws an `ApiError`** when the response status is non-2xx (e.g., `404` or `500`).
-  - `[ ]` **Test 3 (onStatus feature)**: Test that if an `onStatus` handler for a specific code (e.g., `422`) is provided, that handler is called and an `ApiError` is **not** thrown.
-  - `[ ]` **Test 4 (onStatus feature)**: Test that the return value of an `onStatus` handler becomes the final result of the request.
-  - `[ ]` **Implementation**: Write the `responseParser.js` module.
+- `[x]` **Module: `responseParser.js`**
+  - `[x]` Create the test file: `responseParser.test.js`.
+  - `[x]` **Test 1**: Test that it correctly parses a successful JSON response.
+  - `[x]` **Test 2**: Test that it **throws an `ApiError`** when the response status is non-2xx (e.g., `404` or `500`).
+  - `[x]` **Test 3 (onStatus feature)**: Test that if an `onStatus` handler for a specific code (e.g., `422`) is provided, that handler is called and an `ApiError` is **not** thrown.
+  - `[x]` **Test 4 (onStatus feature)**: Test that the return value of an `onStatus` handler becomes the final result of the request.
+  - `[x]` **Implementation**: Write the `responseParser.js` module.
 
 ---
 
