@@ -1,0 +1,33 @@
+{
+  "name": "react-native-api-manager",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "jest",
+    "lint": "eslint src/",
+    "lint:fix": "eslint src/ --fix",
+    "format": "prettier --write src/"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://alan-chen-la-478@github.com/Silas-and-Sobae-Gummi-IO/React-Native-Api-Manager.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/Silas-and-Sobae-Gummi-IO/React-Native-Api-Manager/issues"
+  },
+  "homepage": "https://github.com/Silas-and-Sobae-Gummi-IO/React-Native-Api-Manager#readme",
+  "devDependencies": {
+    "@babel/core": "^7.28.4",
+    "@babel/preset-env": "^7.28.3",
+    "eslint": "^9.37.0",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-prettier": "^5.5.4",
+    "jest": "^30.2.0",
+    "prettier": "^3.6.2"
+  }
+}
