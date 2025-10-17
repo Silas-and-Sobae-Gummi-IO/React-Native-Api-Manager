@@ -79,20 +79,20 @@ This is the final phase. You will need to mock the global `fetch` function and l
   - `[x]` Test that an `onSuccess` interceptor can modify the final data returned to the user.
   - `[x]` Test that an `onError` interceptor is called when `fetch` is mocked to fail, and that it can modify the thrown error.
 
-- `[x]` **Test 3 (Timeout Feature)**: Use fake timers to test that a request aborts and throws a specific timeout error if `fetch` doesn't resolve within the configured `timeout`.
+- `[?]` **Test 3 (Timeout Feature)**: Use fake timers to test that a request aborts and throws a specific timeout error if `fetch` doesn't resolve within the configured `timeout`.
 
-- `[ ]` **Test 4 (Retry Feature)**:
-  - `[ ]` Mock `fetch` to fail once with a status from `retryOn` (e.g., 503), then succeed. Configure `retries: 1`. Assert `fetch` was called twice.
-  - `[ ]` Use fake timers to assert that the `retryDelay` was respected between the failed and retried calls.
+- `[?]` **Test 4 (Retry Feature)**:
+  - `[?]` Mock `fetch` to fail once with a status from `retryOn` (e.g., 503), then succeed. Configure `retries: 1`. Assert `fetch` was called twice.
+  - `[?]` Use fake timers to assert that the `retryDelay` was respected between the failed and retried calls.
 
-- `[ ]` **Test 5 (cancelKey Feature)**: Fire two requests with the same `cancelKey`. Assert that the `AbortSignal` for the first request was triggered.
+- `[?]` **Test 5 (cancelKey Feature)**: Fire two requests with the same `cancelKey`. Assert that the `AbortSignal` for the first request was triggered.
 
-- `[ ]` **Test 6 (logLevel Feature)**: Test that when `logLevel: 'debug'` is set, `console.log` (or a mocked equivalent) is called.
+- `[x]` **Test 6 (logLevel Feature)**: Test that when `logLevel: 'debug'` is set, `console.log` (or a mocked equivalent) is called.
 
-- `[ ]` **Test 7 (transformResponse Feature)**: Make a request with a per-request `transformResponse` function and assert that the final resolved data is the transformed version.
+- `[x]` **Test 7 (transformResponse Feature)**: Make a request with a per-request `transformResponse` function and assert that the final resolved data is the transformed version.
 
-- `[ ]` **Test 8 (Shorthand Methods)**:
-  - `[ ]` Test `api.request('put:users/1', ...)` and assert `fetch` is called with `method: 'PUT'`.
-  - `[ ]` Test `api.configureInterceptor('+name', ...)` to ensure it correctly calls the internal `InterceptorManager`.
+- `[x]` **Test 8 (Shorthand Methods)**:
+  - `[x]` Test `api.request('put:users/1', ...)` and assert `fetch` is called with `method: 'PUT'`.
+  - `[x]` Test `api.configureInterceptor('+name', ...)` to ensure it correctly calls the internal `InterceptorManager`.
 
-- `[ ]` **Implementation**: Write the final `ApiClient.js` class, integrating all the modules you've built and tested to make these final integration tests pass.
+- `[x]` **Implementation**: Write the final `ApiClient.js` class, integrating all the modules you've built and tested to make these final integration tests pass.
