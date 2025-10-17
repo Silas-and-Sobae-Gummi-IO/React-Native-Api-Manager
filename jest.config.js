@@ -4,4 +4,9 @@ module.exports = {
 
   // The test environment that will be used for testing.
   testEnvironment: 'node',
+
+  transformIgnorePatterns: [
+    // This negative lookahead pattern means: ignore node_modules EXCEPT for 'uuid'
+    '/node_modules/(?!uuid)/',
+  ],
 };

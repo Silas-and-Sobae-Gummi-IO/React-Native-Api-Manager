@@ -1,32 +1,84 @@
 // src/agent/ApiAgent.features.test.js
 
+import { ApiAgent } from './ApiAgent';
+import { ApiClient } from '../client/ApiClient';
+import { ApiError } from '../core/ApiError';
+
+// Spy on the REAL prototype method
+const performFetchSpy = jest.spyOn(ApiClient.prototype, '_performFetch');
+// Mock fetch globally
+global.fetch = jest.fn();
+
 describe('ApiAgent - High-Level Features', () => {
-  // We will remove this .skip as we start implementing the features in this file.
-  describe.skip('High-Level Feature Functionality', () => {
-    // --- Phase 3: High-Level Feature Modules ---
+  let testAgent;
+  let logSpy;
+  let errorSpy;
 
-    describe('Automatic Token Refresh', () => {
-      it('should pause new requests when a token refresh is in progress', () => {});
-      it('should retry the original failed request after a successful token refresh', () => {});
-      it('should release all paused requests after a successful token refresh', () => {});
-      it('should call the refresh handler only once, even with multiple concurrent failures', () => {});
-      it('should fail all paused requests if the token refresh fails', () => {});
+  beforeEach(() => {
+    jest.useFakeTimers(); // Keep fake timers enabled for consistency
+    jest.clearAllMocks();
+    testAgent = new ApiAgent();
+    performFetchSpy.mockResolvedValue({
+      // Default mock response object
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve({}),
+      text: () => Promise.resolve('{}'),
     });
 
-    describe('Offline Persistence & Replay', () => {
-      it('should queue a write request to the storage adapter when offline', () => {});
-      it('should NOT queue a read request (GET) when offline', () => {});
-      it('should replay queued requests in order when the device comes back online', () => {});
-    });
+    logSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
+    errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+  });
 
-    describe('Built-in Mocking Adapter', () => {
-      it('should return mock data instead of making a fetch call when mocks are enabled', () => {});
-      it('should make a real fetch call when mocks are disabled', () => {});
-      it('should allow a mock handler to be a function to generate dynamic responses', () => {});
-    });
+  afterEach(() => {
+    jest.useRealTimers();
+    jest.restoreAllMocks();
+  });
 
-    describe('Performance Monitoring & Telemetry', () => {
-      it('should track and report request latency to the performance adapter', () => {});
+  // --- SKIP Conditional Retry Handlers ---
+  describe.skip('Conditional Retry Handlers', () => {
+    let mockHandler;
+    beforeEach(() => {
+      /* ... */
     });
+    it('should retry the original request after successful handler execution', async () => {
+      /* ... */
+    });
+    it('should queue and retry subsequent requests during handler execution', async () => {
+      /* ... */
+    });
+    it('should reject all requests if handler fails', async () => {
+      /* ... */
+    });
+    it('should allow multiple different handlers', async () => {
+      /* ... */
+    });
+  });
+
+  // --- SKIP Offline Persistence & Replay ---
+  describe.skip('Offline Persistence & Replay', () => {
+    let mockAdapter;
+    let mockNetInfo;
+    let networkCallback;
+    beforeEach(() => {
+      /* ... */
+    });
+    it('should queue a write request when offline', async () => {
+      /* ... */
+    });
+    it('should NOT queue a read request (GET) when offline', async () => {
+      /* ... */
+    });
+    it('should replay queued requests when coming back online', async () => {
+      /* ... */
+    });
+  });
+
+  // --- Other Skipped describe blocks ---
+  describe.skip('Built-in Mocking Adapter', () => {
+    /* ... */
+  });
+  describe.skip('Performance Monitoring & Telemetry', () => {
+    /* ... */
   });
 });

@@ -2,6 +2,12 @@
 
 import { RequestScheduler } from './RequestScheduler';
 
+// Helper function to create a mock controller for tests
+const createMockController = () => ({
+  signal: { addEventListener: jest.fn(), aborted: false }, // Provide the signal object
+  abort: jest.fn(),
+});
+
 describe('RequestScheduler', () => {
   let scheduler;
 
@@ -18,19 +24,31 @@ describe('RequestScheduler', () => {
       );
       const task2 = jest.fn(() => new Promise((r) => r('done2')));
 
-      // Schedule both tasks. Task2 should be queued.
-      const promise1 = scheduler.schedule(task1, { channel: 'test' }, {});
-      const promise2 = scheduler.schedule(task2, { channel: 'test' }, {});
+      const controller1 = createMockController();
+      const controller2 = createMockController();
 
-      // Immediately, only task1 should be called
+      const promise1 = scheduler.schedule(
+        task1,
+        { channel: 'test' },
+        controller1
+      );
+      const promise2 = scheduler.schedule(
+        task2,
+        { channel: 'test' },
+        controller2
+      );
+
       expect(task1).toHaveBeenCalledTimes(1);
       expect(task2).not.toHaveBeenCalled();
 
-      // After task1 completes, task2 should be called
       await promise1;
+
+      // THE FIX: Yield to the event loop to allow the scheduler to process the queue.
+      await new Promise(process.nextTick);
+
+      // Now task2 should have been called.
       expect(task2).toHaveBeenCalledTimes(1);
 
-      // Final results should be correct
       await expect(promise1).resolves.toBe('done1');
       await expect(promise2).resolves.toBe('done2');
     });
@@ -40,9 +58,10 @@ describe('RequestScheduler', () => {
     it('should queue requests on a paused channel and run them on resume', async () => {
       scheduler.configureChannels({ test: { concurrency: 1 } });
       const task = jest.fn(() => Promise.resolve('done'));
+      const controller = createMockController();
 
       scheduler.pauseChannel('test');
-      const promise = scheduler.schedule(task, { channel: 'test' }, {});
+      const promise = scheduler.schedule(task, { channel: 'test' }, controller);
 
       // While paused, the task should not be called
       expect(task).not.toHaveBeenCalled();
@@ -59,9 +78,9 @@ describe('RequestScheduler', () => {
     it('should abort all requests within a specific scope', () => {
       scheduler.configureChannels({ test: { concurrency: 2 } });
 
-      const controller1 = { abort: jest.fn() };
-      const controller2 = { abort: jest.fn() };
-      const controller3 = { abort: jest.fn() };
+      const controller1 = createMockController();
+      const controller2 = createMockController();
+      const controller3 = createMockController();
 
       // Schedule three hanging promises
       scheduler.schedule(
