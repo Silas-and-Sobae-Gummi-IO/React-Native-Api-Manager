@@ -70,16 +70,16 @@ This phase focuses on pure, stateless helper functions. They are the easiest to 
 
 This is the final phase. You will need to mock the global `fetch` function and likely use Jest's fake timers for timeout/retry tests.
 
-- `[ ]` **Setup**: Create `ApiClient.test.js` and set up `fetch` mocking.
+- `[x]` **Setup**: Create `ApiClient.test.js` and set up `fetch` mocking.
 
-- `[ ]` **Test 1 (Basic Methods)**: Test `api.get('/users')` and `api.post('/users', { name: 'John' })`. Assert `fetch` was called with the correct final URL, method, headers, and stringified body.
+- `[x]` **Test 1 (Basic Methods)**: Test `api.get('/users')` and `api.post('/users', { name: 'John' })`. Assert `fetch` was called with the correct final URL, method, headers, and stringified body.
 
-- `[ ]` **Test 2 (Interceptors in Action)**:
-  - `[ ]` Test that a `beforeRequest` interceptor can modify a header before `fetch` is called.
-  - `[ ]` Test that an `onSuccess` interceptor can modify the final data returned to the user.
-  - `[ ]` Test that an `onError` interceptor is called when `fetch` is mocked to fail, and that it can modify the thrown error.
+- `[x]` **Test 2 (Interceptors in Action)**:
+  - `[x]` Test that a `beforeRequest` interceptor can modify a header before `fetch` is called.
+  - `[x]` Test that an `onSuccess` interceptor can modify the final data returned to the user.
+  - `[x]` Test that an `onError` interceptor is called when `fetch` is mocked to fail, and that it can modify the thrown error.
 
-- `[ ]` **Test 3 (Timeout Feature)**: Use fake timers to test that a request aborts and throws a specific timeout error if `fetch` doesn't resolve within the configured `timeout`.
+- `[x]` **Test 3 (Timeout Feature)**: Use fake timers to test that a request aborts and throws a specific timeout error if `fetch` doesn't resolve within the configured `timeout`.
 
 - `[ ]` **Test 4 (Retry Feature)**:
   - `[ ]` Mock `fetch` to fail once with a status from `retryOn` (e.g., 503), then succeed. Configure `retries: 1`. Assert `fetch` was called twice.
