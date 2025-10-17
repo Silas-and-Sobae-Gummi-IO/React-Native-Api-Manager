@@ -1,68 +1,57 @@
 /**
- * A Set of valid HTTP methods for efficient lookup.
+ * Valid HTTP methods supported by shorthand syntax.
  * @private
  */
-const validMethods = new Set(['get', 'post', 'put', 'patch', 'delete']);
+const METHOD_SET = new Set(['get', 'post', 'put', 'patch', 'delete']);
 
 /**
- * Parses a shorthand URL string like "post:users" into an object.
- * Defaults to 'get' if no method is specified.
- * @param {string} shorthand The shorthand URL string.
- * @returns {{method: string, url: string}} The parsed method and URL.
- * @throws {Error} If an invalid method is provided.
+ * Parse a shorthand URL string, e.g. "post:users" => { method: 'post', url: 'users' }.
+ * If no method prefix is present, defaults to GET.
+ *
+ * @param {string} shorthand
+ * @returns {{ method: string, url: string }}
  */
 export function parseShorthandUrl(shorthand) {
-  const parts = shorthand.split(':');
+  const parts = String(shorthand).split(':');
 
-  if (parts.length === 1) {
-    return { method: 'get', url: parts[0] };
-  }
+  if (parts.length === 1) return { method: 'get', url: parts[0] };
 
   const method = parts[0].toLowerCase();
-  const url = parts.slice(1).join(':');
+  const url = parts.slice(1).join(':'); // preserve any additional colons in URL
 
-  if (!validMethods.has(method)) {
+  if (!METHOD_SET.has(method)) {
     throw new Error(`Invalid shorthand method: ${parts[0]}`);
   }
 
   return { method, url };
 }
 
-// The parseInterceptorShorthand function remains the same...
-
 /**
- * A map of shorthand symbols to their action names.
+ * Map of shorthand symbols to actions.
  * @private
  */
-const actionMap = {
-  '+': 'add',
-  '-': 'remove',
-  '~': 'replace',
-};
+const ACTION_MAP = { '+': 'add', '-': 'remove', '~': 'replace' };
 
 /**
- * Parses a shorthand interceptor string like "+logger@20" into an object.
- * @param {string} shorthand The shorthand interceptor string.
- * @returns {{action: string, name: string, priority?: number} | null} The parsed interceptor config or null if invalid.
+ * Parse interceptor shorthand commands like "+logger@20" or "-logger".
+ *
+ * @param {string} shorthand
+ * @returns {{ action: 'add'|'remove'|'replace', name: string, priority?: number } | null}
  */
 export function parseInterceptorShorthand(shorthand) {
-  const match = shorthand.match(/^([+\-~])([^@]+)(?:@(\d+))?$/);
-
-  if (!match) {
-    return null;
-  }
+  const match = String(shorthand).match(/^([+\-~])([^@]+)(?:@(\d+))?$/);
+  if (!match) return null;
 
   const [, symbol, name, priorityStr] = match;
-  const action = actionMap[symbol];
-
-  const result = {
-    action,
-    name,
-  };
+  const action = ACTION_MAP[symbol];
 
   if (action === 'add') {
-    result.priority = priorityStr ? parseInt(priorityStr, 10) : 10;
+    return {
+      action,
+      name,
+      priority: priorityStr ? parseInt(priorityStr, 10) : 10,
+    };
   }
 
-  return result;
+  return { action, name };
 }
