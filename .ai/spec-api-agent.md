@@ -2,65 +2,94 @@
 
 ## **1. Overview & Core Philosophy**
 
-The `ApiAgent` is a high-level service layer that manages, configures, and enhances all `ApiClient` instances within an application. It acts as the central **command center** for cross-cutting concerns like authentication, offline support, and global configuration, promoting a clean, DRY (Don't Repeat Yourself), and resilient network architecture.
+The `ApiAgent` is a high-level service layer that manages, configures, and enhances all `ApiClient` instances within an application. It acts as the central **command center** for cross-cutting concerns like conditional retries (e.g., auth refresh), offline support, request scheduling, and global configuration.
 
-It is designed using a **Flexible Singleton** pattern: a default instance is exported for easy application-wide use, while the class itself is also exported for testing and advanced use cases. This provides the convenience of a singleton with the testability of a standard class.
-
----
-
-## **2. Core API & Configuration**
-
-### **2.1. Instance & Client Management**
-
-* `createClient(name: string, config: ApiClientConfig): ApiClient`
-    * **Description**: Instantiates a new `ApiClient`, registers it under a unique name, and intelligently merges the global agent configuration with the client-specific config. It also applies any relevant global interceptors.
-    * **Common Scenario**: In your app's setup file, you'll create clients for the different services you talk to. For example: `agent.createClient('default', { baseURL: 'https://api.myapp.com/v1' })` and `agent.createClient('analytics', { baseURL: 'https://analytics.myapp.com' })`. You can then retrieve these configured clients from anywhere using `agent.getClient('default')`.
-
-* `getClient(name: string): ApiClient`
-    * **Description**: Retrieves a registered client instance by its name.
-    * **Common Scenario**: Inside a service file or a React hook, you need to make an API call. You simply import the global agent and call `const client = agent.getClient('default');` to get the correctly configured instance.
-
-* `setGlobalConfig(config: ApiClientConfig)`
-    * **Description**: Sets the base configuration that all newly created clients will inherit.
-    * **Common Scenario**: You want every single API client in your app to have a default timeout of 20 seconds and to log errors in debug mode. You call `agent.setGlobalConfig({ timeout: 20000, logLevel: 'debug' })` once at startup.
-
-### **2.2. Global & Scoped Interceptors**
-
-* **`addGlobalInterceptor(name: string, interceptor: Interceptor, options?: { priority?: number, clients?: string[] })`**
-    * **Description**: Adds a named interceptor. If the `options.clients` array is provided, the interceptor is applied only to that specific group of clients. Otherwise, it is applied to all current and future clients.
-    * **Common Scenario 1 (Truly Global)**: You want to add a logging interceptor that reports every single network error to a service like Sentry. You would add it without a scope: `agent.addGlobalInterceptor('sentry-logger', sentryInterceptor)`.
-    * **Common Scenario 2 (Scoped)**: You have three API clients (`serviceA`, `serviceB`, `payments`). The `payments` client requires a special encryption header, but the others do not. You can create an encryption interceptor and apply it only where needed: `agent.addGlobalInterceptor('encryption', encryptionInterceptor, { clients: ['payments'] })`.
+It uses a **Flexible Singleton** pattern: a default instance (`agent`) is exported, alongside the `ApiAgent` class itself.
 
 ---
 
-## **3. Advanced Feature Modules**
+## **2. Core Modules & Responsibilities**
 
-### **3.1. Automatic Token Refresh & Request Queuing**
+- **`src/agent/ApiAgent.js` (Public Interface)**: The main class. Manages clients, global config/interceptors, and orchestrates internal helpers. Provides public API methods.
+- **`src/agent/internals/RequestScheduler.js`**: Internal class managing request channels, concurrency limits, pausing, request queues (priority-sorted), and cancellation scopes.
+- **`src/agent/internals/ConditionalRetrier.js`**: Internal class managing the logic for a single condition-based retry flow (detect error, pause queue, run handler, resume queue).
+- **`src/agent/internals/OfflineManager.js`**: Internal class managing offline request queuing, interacting with `StorageAdapter` and `NetInfo`, and triggering replay.
 
-* **Description**: Orchestrates a seamless, app-wide authentication token refresh flow. When any client receives a `401 Unauthorized` error, the agent pauses all new requests, runs a single refresh function, and then automatically retries the original and all paused requests with the new token.
-* **Common Scenario**: A user leaves your app open for an hour, and their authentication token expires. They come back and click a "like" button. The request fails with a `401`. Instead of logging them out, the agent catches this, silently fetches a new token using a refresh token, and then the "like" request is automatically retried and succeeds. The user has no idea anything happened. This is the standard for modern, professional web applications.
+---
 
-### **3.2. Offline Persistence & Replay**
+## **3. `ApiAgent` Class Details**
 
-* **Description**: Provides a mechanism to queue "write" requests (POST, PUT, PATCH, DELETE) when the device is offline and automatically send them when connectivity is restored. It uses a user-provided **Adapter** for storage, so it can work with `AsyncStorage`, `MMKV`, `SQLite`, or any other solution.
-* **Common Scenario**: A user is on a train and their connection is spotty. They write a comment and press "Post." The agent detects the app is offline, saves the "post comment" request to the device's storage, and the UI immediately shows the comment as "Pending." When the train leaves the tunnel and connectivity is restored, the agent automatically sends the saved request, and the comment is successfully posted.
+### **Public Methods**
 
-### **3.3. Intelligent Request Scheduling & Channels**
+- `constructor()`: Initializes client map, global config, interceptor list, scheduler, and retrier list.
+- `setGlobalConfig(config)`: Sets/merges base configuration inherited by new clients.
+- `createClient(name, config = {})`: Creates/re-creates an `ApiClient`. **Decorates** the client's `_executeAttempt` method to integrate scheduler and conditional retriers. Applies global interceptors. Stores `{ instance, config }`.
+- `getClient(name)`: Retrieves a client instance by name. Throws if not found.
+- `updateClientConfig(name, newConfig)`: Updates a client's config by merging and re-creating it via `createClient`.
+- `addGlobalInterceptor(name, callbacks, options = {})`: Adds an interceptor config to the agent's list and applies it to relevant clients (using `client.interceptors.add`). Handles `priority` and `clients` scope. Idempotent (removes existing before adding).
+- `removeGlobalInterceptor(name)`: Removes an interceptor config from the agent and calls `client.interceptors.remove` on relevant clients based on original scope.
+- `addRetryHandler(options)`: Creates and registers a `ConditionalRetrier`. Requires `{ name, shouldRetry: (error) => boolean, handler: async (error) => Promise<void> }`. Idempotent (removes existing by name).
+- `removeRetryHandler(name)`: Removes a conditional retrier by name.
+- `configureChannels(channelConfig)`: Delegates to `scheduler.configureChannels`.
+- `pauseChannel(channelName)`: Delegates to `scheduler.pauseChannel`.
+- `resumeChannel(channelName)`: Delegates to `scheduler.resumeChannel`.
+- `abortScope(scopeName)`: Delegates to `scheduler.abortScope`.
+- `enablePersistence({ adapter, netInfo })`: Creates the `OfflineManager`. Defines a `replayRequestFn` that uses a default client with `_bypassOffline`. Injects a global interceptor (`internal-offline-handler`) to check `offlineManager.shouldQueue` and potentially throw `queueError`.
 
-* **Description**: Provides granular control over network traffic by introducing channels with concurrency limits, pausing, and prioritization.
-* **Common Scenario**: Your app needs to sync a large number of files in the background. If you fire 100 requests at once, the UI will become sluggish. Instead, you send them all on a channel configured with a low concurrency: `agent.configureChannels({ backgroundSync: { concurrency: 2 } })`. The agent will then act as a scheduler, ensuring only two file sync requests are active at any given time, preventing network saturation and keeping the UI responsive.
+### **Internal Logic**
 
-### **3.4. Scoped Request Cancellation**
+- **Decorator in `createClient`**: Wraps the `ApiClient`'s `_executeAttempt`.
+  1.  Calls `client._setupAttempt` to get the real `controller`.
+  2.  Defines `attemptFn` which calls `scheduler.schedule` with the original execute logic and the real controller.
+  3.  Calls `attemptFn()`.
+  4.  In `catch` block: Iterates through `conditionalRetriers`. If one `handleError`, returns its promise. Otherwise, re-throws original error.
+  5.  Ensures `client._cleanupAttempt` is called appropriately after success, failure, or retry.
+- **`enablePersistence`**: Creates `OfflineManager` and adds an `onRequest` interceptor that checks `offlineManager.shouldQueue`. If true, calls `offlineManager.queueRequest` and throws a specific error (`isOfflineQueueError: true`) to stop the request chain.
 
-* **Description**: Allows for canceling groups of related requests via a `scope` tag, without affecting other in-flight requests.
-* **Common Scenario**: A user navigates to a complex dashboard screen which fires off 5 different requests to populate various charts and widgets. They quickly navigate away before the requests have finished. In the component's cleanup effect, you call `agent.abortScope('dashboard')`. This instantly cancels all 5 dashboard-related requests, saving bandwidth and preventing React from trying to update state on an unmounted component.
+---
 
-### **3.5. Performance Monitoring & Telemetry**
+## **4. Advanced Feature Modules (Details)**
 
-* **Description**: Gathers and exports network performance metrics (like request latency, retry attempts, etc.) via a user-defined adapter.
-* **Common Scenario**: You want to understand how your API is performing for real users. You can create a simple adapter that sends timing data to your analytics service (e.g., Sentry, Datadog). This allows you to create dashboards to answer questions like, "What is the average API response time for users in Brazil?" or "How many times are requests failing and needing to be retried?"
+### **4.1. Conditional Retries (Formerly Auth Refresh)**
 
-### **3.6. Built-in Mocking Adapter**
+- **Mechanism**: Managed by `ConditionalRetrier` instances stored in `agent.conditionalRetriers`.
+- **Trigger**: Agent's decorated `_executeAttempt` catches errors and iterates through retriers, calling `retrier.handleError(error, attemptFn, controller)`.
+- **`ConditionalRetrier` Logic**:
+  - Checks `shouldRetry(error)`.
+  - If true and not already running, runs the async `handler(error)`. Pauses subsequent matching requests.
+  - After handler completes (success/fail), processes paused queue (`_processPausedRequests`): retries on handler success, rejects on handler failure.
+- **`addRetryHandler`**: Public API to register different retry conditions (e.g., auth (401), maintenance mode (503)).
 
-* **Description**: Intercepts outgoing requests to return mock data, enabling UI development and testing without a live backend. This entire module should be "tree-shaken" (removed) from a production build.
-* **Common Scenario**: The backend team is still building the new `/v2/profile` endpoint, but the frontend team wants to build the new profile screen. The frontend developer can use `agent.mock('get:/v2/profile', { body: { name: 'Mock User' } })`. Now, the `ApiClient` will return this mock data instantly, allowing the entire UI to be built and tested before the API is even ready.
+### **4.2. Offline Persistence & Replay**
+
+- **Mechanism**: Managed by `OfflineManager` instance (created by `enablePersistence`). Requires user-provided `StorageAdapter` and `NetInfo`.
+- **`StorageAdapter` Interface**: `{ getQueue(): Promise<SerializedRequest[]>, queueRequest(req): Promise<void>, dequeueRequests(ids): Promise<void> }`.
+- **Queuing**: Agent adds a high-priority `onRequest` interceptor. If `offlineManager.shouldQueue(method)` is true (offline & write method), interceptor calls `offlineManager.queueRequest(config)` and throws `queueError`.
+- **Replay**: `OfflineManager` listens to `NetInfo`. On transition to online, calls `adapter.getQueue`, then iterates, calling the agent-provided `replayRequestFn` for each item. On success, calls `adapter.dequeueRequests`. Stops on first replay error.
+- **`replayRequestFn`**: Defined in `enablePersistence`. Uses a client (e.g., `'default'`) and passes `{ _bypassOffline: true }` option to its request method to skip the queue check.
+
+### **4.3. Intelligent Request Scheduling & Channels**
+
+- **Mechanism**: Managed by `RequestScheduler` instance.
+- **Configuration**: `agent.configureChannels({ name: { concurrency: number } })`. Default channel `'default'` has `Infinity` concurrency.
+- **Scheduling**: Agent's decorated `_executeAttempt` calls `scheduler.schedule(attemptFn, config, controller)`.
+- **`RequestScheduler` Logic**:
+  - Adds task to channel queue (sorted by `priority` option, default 0).
+  - Checks concurrency & paused status (`_processQueue`).
+  - If slot available, runs `attemptFn`. Manages active request set.
+  - `finally` block cleans up active set, scope map, and calls `_processQueue` again.
+- **Pausing**: `agent.pauseChannel` / `agent.resumeChannel` delegate to scheduler, toggling `paused` flag and calling `_processQueue` on resume.
+
+### **4.4. Scoped Request Cancellation**
+
+- **Mechanism**: Managed by `RequestScheduler`.
+- **Association**: `scheduler.schedule` adds `controller` to `scopes` map if `config.scope` is present.
+- **Cancellation**: `agent.abortScope` delegates to `scheduler.abortScope`, which finds controllers in map and calls `.abort()`. Cleanup happens in `_processQueue`'s `finally`.
+
+### **4.5. Performance Monitoring & Telemetry**
+
+- _(Spec only, implementation TBD)_ Requires adapter. Agent would likely inject interceptors to time requests and call `adapter.trackEvent`.
+
+### **4.6. Built-in Mocking Adapter**
+
+- _(Spec only, implementation TBD)_ Agent would likely inject a high-priority interceptor to check for mock handlers and return mock data, bypassing scheduler and fetch.

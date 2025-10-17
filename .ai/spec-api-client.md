@@ -4,77 +4,78 @@
 
 The `ApiClient` is a modern, flexible, and framework-agnostic JavaScript API client. It is built with a modular, test-driven approach, prioritizing ease of use and powerful interceptor capabilities. It serves as the foundational **engine** for all HTTP requests, designed to be robust and highly configurable. It knows how to talk to a server but knows nothing about UI frameworks.
 
+---
+
 ## **2. Core Modules & Responsibilities**
 
-* **`ApiClient.js` (Public Interface)**: The main class the user interacts with. It orchestrates all internal modules.
-* **`InterceptorManager.js` (The "Hooks" Engine)**: Manages the lifecycle of interceptors based on the WordPress model (hooks, priority).
-* **`requestBuilder.js` (Request Composer)**: A pure module that takes user-friendly options and builds the final config object required by `fetch`.
-* **`responseParser.js` (Response Handler)**: A pure module that processes the raw `fetch` response, handles `onStatus` callbacks, and throws custom errors.
-* **`error.js` (Custom Error)**: Defines the `ApiError` class for consistent, predictable error handling. It will contain rich context like the status code, response body, and original request config.
-* **`utils/` (Helper Functions)**: A collection of pure, stateless functions for parsing (`"post:users"`), URL serialization (`?q=test`), and header merging.
+_(Updated paths reflect the final folder structure)_
+
+- **`src/client/ApiClient.js` (Public Interface)**: The main class the user interacts with. Orchestrates internal modules and provides public methods (`.get`, `.post`, `.request`, etc.). Manages the retry loop and cancellation map.
+- **`src/client/internals/InterceptorManager.js`**: Manages the lifecycle of interceptors (add, remove, run pipelines) based on priority.
+- **`src/client/internals/requestBuilder.js`**: Pure function that takes merged configuration and builds the final `fetch` URL and options object. Automatically handles JSON stringification and `FormData` creation (including for file objects/arrays).
+- **`src/client/internals/responseParser.js`**: Pure async function that processes the raw `fetch` response. Handles `onStatus` callbacks, attempts JSON parsing (with optional `autoFixJson`), and throws `ApiError` on failures.
+- **`src/core/ApiError.js`**: Defines the custom `ApiError` class extending `Error`, containing `config`, `response`, and `status` properties.
+- **`src/utils/`**: Contains pure helper functions for URL parameter serialization (`serializeParams` supporting arrays), header merging (`mergeHeaders`), and shorthand parsing (`parseShorthandUrl`, `parseInterceptorShorthand`).
 
 ---
 
-## **3. Configuration Objects**
+## **3. `ApiClient` Class Details**
 
-Configuration is layered. Per-request options always override instance options.
+### **Public Methods**
+
+- `constructor(config = {})`: Initializes the client with instance configuration, sets up the interceptor manager, cancellation map, and optionally adds the internal logger.
+- `get = async (url, options = {})`: Performs a GET request.
+- `post = async (url, body, options = {})`: Performs a POST request.
+- `put = async (url, body, options = {})`: Performs a PUT request.
+- `patch = async (url, body, options = {})`: Performs a PATCH request.
+- `delete = async (url, options = {})`: Performs a DELETE request.
+- `request = async (shorthandUrl, ...args)`: Delegates to appropriate method based on shorthand (e.g., `"post:users"`).
+- `configureInterceptor = (shorthand, callbacks)`: Adds/removes interceptors using shorthand (e.g., `"+logger@10"`).
+
+### **Private Methods (Conceptual)**
+
+- `_request(requestSpecificConfig)`: Main orchestrator, manages the retry loop.
+- `_executeAttempt(config)`: Orchestrates a single attempt (setup, execute, cleanup).
+- `_setupAttempt(config)`: Handles `AbortController`, `cancelKey`, and `setTimeout`. Returns `{ controller, timeoutId }`.
+- `_performFetch(config, controller)`: Runs `onRequest` interceptors, builds request, calls `fetch`, parses response (via `responseParser`), handles `transformResponse`, runs `onSuccess` interceptors. Catches errors and handles timeout `AbortError`.
+- `_cleanupAttempt(config, timeoutId)`: Clears timeout and removes `cancelKey` entry.
+
+---
+
+## **4. Configuration Objects**
 
 ### **Instance Configuration (`new ApiClient(config)`)**
 
-This object defines the default behavior for every request made by this client instance.
+- `baseURL`: `string` - Base URL for requests.
+- `headers`: `object` - Default headers.
+- `timeout`: `number` - Default request timeout in `ms`.
+- `interceptors`: `array` - Initial array of interceptor objects `{ name, callbacks, priority }`.
+- `logLevel`: `'none' | 'debug'` - Enables a built-in console logging interceptor.
+- `retries`: `number` (default: `0`) - Default number of retry attempts.
+- `retryDelay`: `(attempt: number) => number` - Function calculating delay before retry (default: exponential backoff).
+- `retryOn`: `array` - Status codes or `'network-error'` that trigger a retry (default: `[503, 'network-error']`).
+- `autoFixJson`: `boolean` (default: `false`)
+  - **Description**: If `true`, the `responseParser` will attempt to strip leading non-JSON text from a response body if the initial JSON parse fails. A warning is logged if successful.
+  - **Common Scenario**: Dealing with legacy PHP APIs that sometimes prefix JSON responses with warnings or notices.
 
-* `baseURL`: `string`
-    * **Description**: A URL string that will be prepended to all relative request paths.
-    * **Common Scenario**: You have one client dedicated to your main REST API. You set `baseURL: 'https://api.myapp.com/v1'` once, then you can make requests like `api.get('/users')` instead of typing the full URL every time.
+### **Per-Request Options (e.g., `api.get(url, options)`)**
 
-* `headers`: `object`
-    * **Description**: A plain object of headers to be sent with every request.
-    * **Common Scenario**: Setting default headers for your API, like `{'Accept': 'application/json', 'Content-Type': 'application/json'}`. This is also where you would set a long-lived API key.
+- `headers`: `object` - Merged with/overrides instance headers.
+- `params`: `object` - Query parameters (supports arrays via key repetition).
+- `timeout`: `number` - Request-specific timeout.
+- `interceptors`: `object` - Manage interceptors for this request: `{ append: [], prepend: [], replace: [] }`. _(Note: Implementation TBD)_
+- `cancelKey`: `string | symbol` - Key to auto-abort previous requests.
+- `onStatus`: `object` - Map of status codes/ranges to handlers, run _before_ interceptors.
+- `transformResponse`: `(data) => any` - Function to reshape successful data _after_ parsing but _before_ `onSuccess` interceptors.
+- `retries`, `retryDelay`, `retryOn`, `autoFixJson`: Can override instance defaults for a single request.
+- `_bypassOffline`: `boolean` (Internal flag used by ApiAgent replay).
 
-* `timeout`: `number`
-    * **Description**: The default time in milliseconds that a request will wait for a response before it is automatically aborted.
-    * **Common Scenario**: To prevent your app from hanging indefinitely on a slow network, you can set a global `timeout: 15000` (15 seconds). If any request takes longer than that, it will fail with a specific timeout error.
+---
 
-* `interceptors`: `array`
-    * **Description**: An initial array of interceptor objects to apply globally for this instance.
-    * **Common Scenario**: A logging interceptor that `console.log`s every request could be added here so that it's active from the moment the client is created.
+## **5. Key Implementation Details**
 
-* `logLevel`: `'none' | 'debug'`
-    * **Description**: Enables or disables a built-in, pre-configured logging interceptor for easy debugging.
-    * **Common Scenario**: During development, you set `logLevel: 'debug'` to see all outgoing requests and incoming responses in the console without writing a custom interceptor. In production, you set it to `'none'` to disable the logs.
-
-* `retries`: `number` (default: `0`)
-    * **Description**: The number of times to automatically retry a failed request.
-    * **Common Scenario**: A user's device briefly loses network connection, causing a request to fail. Instead of showing an immediate error, you set `retries: 2`. The client will automatically try the request two more times before giving up. This makes the app feel much more resilient to temporary network blips.
-
-* `retryDelay`: `(attempt: number) => number`
-    * **Description**: A function to calculate the delay in `ms` before the next retry. The default should be an exponential backoff (e.g., `1000 * 2 ** attempt`), which waits longer between each retry to avoid overwhelming a struggling server.
-    * **Common Scenario**: When retrying, you don't want to spam the server immediately. Exponential backoff means the client waits 1s, then 2s, then 4s, giving the network or server time to recover.
-
-* `retryOn`: `array`
-    * **Description**: An array of status codes or the string `'network-error'` that should trigger a retry.
-    * **Common Scenario**: You only want to retry on specific, temporary server errors. You would set `retryOn: [503, 'network-error']`. This means "retry if the server is temporarily unavailable (503) or if there's a device network error, but do **not** retry on a `404 Not Found` error, because that is a permanent failure."
-
-### **Per-Request Options (`api.get('/users', options)`)**
-
-This object allows you to override or add to the instance configuration for a single, specific request.
-
-* `headers`: `object`
-    * **Description**: Headers that will be merged with/override instance headers for this request only.
-    * **Common Scenario**: Most of your requests are JSON, but for one specific file upload, you need to send a different header. You can specify it here without affecting other requests. `api.post('/upload', formData, { headers: {'X-Custom-Header': 'value'} })`.
-
-* `params`: `object`
-    * **Description**: An object of query parameters to be serialized and appended to the URL.
-    * **Common Scenario**: Instead of manually building a URL like `'/search?q=hello%20world&status=active'`, you can simply provide `{ params: { q: 'hello world', status: 'active' } }`. The client handles the encoding and formatting for you.
-
-* `cancelKey`: `string | symbol`
-    * **Description**: A unique identifier. If a new request is made with the same `cancelKey` before this one completes, this request will be automatically aborted.
-    * **Common Scenario**: A user is typing rapidly in a search bar. You fire a request for each keystroke with `cancelKey: 'search-input'`. This ensures that only the request for the very latest text ("react") is allowed to complete; all previous requests ("r", "re", "rea") are cancelled. This prevents race conditions and saves network resources.
-
-* `onStatus`: `object`
-    * **Description**: A map of status codes (`200`, `'4xx'`), or wildcards (`'*'`) to callback functions. These callbacks run *before* any interceptors and can completely bypass the standard response/error flow.
-    * **Common Scenario**: Your API sometimes returns a `202 Accepted` status to indicate a long-running job. You can use `{ onStatus: { 202: () => showJobPendingToast() } }` to handle this specific case cleanly without needing a complex interceptor. Or, for a form, `{ onStatus: { 422: (res) => setFormErrors(res.data.errors) } }` to handle validation errors directly.
-
-* `transformResponse`: `(data) => any`
-    * **Description**: A function to re-shape the successful response data before it's returned from the promise. Runs after parsing but before success interceptors.
-    * **Common Scenario**: The API returns a deeply nested object like `{ data: { attributes: { user: { name: 'John' } } } }`. You can use `transformResponse: (data) => data.data.attributes.user` to simplify the final returned data to just `{ name: 'John' }`.
+- **File Uploads:** Automatically detects request bodies containing file-like objects (`{ uri, name, type }`) or arrays of them (even nested) and constructs a `FormData` object. Lets the environment set the `Content-Type` for `FormData`.
+- **Error Handling:** Non-2xx responses or parsing failures result in an `ApiError` being thrown, containing `config`, `response` (`{ data, status }`), and `status`. Timeout aborts throw a specific `ApiError`. Other aborts (like `cancelKey`) re-throw the original `AbortError` after cleanup.
+- **Interceptors:** Run via `InterceptorManager`. `onRequest` runs before `fetch`, `onSuccess` runs on successfully parsed/transformed data, `onError` runs on thrown errors (`ApiError` or others). `onStatus` handlers bypass interceptors.
+- **Retries:** Handled in a loop within `_request`. Only retries based on `retryOn` conditions.
+- **Timeouts & Cancellation:** Managed via `AbortController` in `_setupAttempt` and `_cleanupAttempt`. Uses `signal.reason` to distinguish timeout aborts.
