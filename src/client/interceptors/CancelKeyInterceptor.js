@@ -2,6 +2,10 @@
 
 import { BaseInterceptor } from './BaseInterceptor';
 
+/**
+ * CancelKeyInterceptor
+ * Aborts the previous request with the same cancelKey.
+ */
 export class CancelKeyInterceptor extends BaseInterceptor {
   register(hooks, client) {
     this.hooks = hooks;

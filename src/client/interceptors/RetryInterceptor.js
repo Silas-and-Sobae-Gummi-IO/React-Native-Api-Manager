@@ -2,6 +2,10 @@
 
 import { BaseInterceptor } from './BaseInterceptor';
 
+/**
+ * RetryInterceptor
+ * Handles retries via the 'error' filter based on retry config.
+ */
 export class RetryInterceptor extends BaseInterceptor {
   register(hooks, client) {
     this.hooks = hooks;

@@ -9,9 +9,15 @@ import {mergeHeaders} from '../utils/headers';
 import {CoreInterceptor} from './interceptors/CoreInterceptor';
 import {ApiRequest} from './ApiRequest';
 
+/**
+ * ApiClient
+ * A hooks-driven HTTP client for modern JS apps.
+ * - Exposes WordPress-like filters/actions via InterceptorManager
+ * - Returns ApiRequest handles for manual aborts
+ */
 export class ApiClient {
-  /**
-   * ApiClient
+/**
+   * Create a new ApiClient instance.
    *
    * Built-in config (documented):
    * - baseURL?: string
@@ -33,6 +39,13 @@ export class ApiClient {
   /**
    * Prepare the full config by merging instance + request, then allowing interceptors to fill defaults & adjust.
    */
+/**
+   * Build the per-request config by merging instance + user config and running filters.
+   * @param {object} userConfig
+   * @param {object} requestContext
+   * @returns {Promise<object>}
+   * @private
+   */
   async _prepareConfig(userConfig, requestContext) {
     const mergedHeaders = mergeHeaders(this.config.headers || {}, userConfig.headers || {});
     let cfg = {...this.config, ...userConfig, headers: mergedHeaders};
@@ -45,7 +58,12 @@ export class ApiClient {
   /**
    * Entry point: compute final config via interceptors, then execute one attempt; retries handled by RetryInterceptor.
    */
-  async _request(userConfig) {
+/**
+   * Public entry: create a request handle and start dispatching through the pipeline.
+   * @param {object} userConfig
+   * @returns {import('./ApiRequest').ApiRequest}
+   */
+  _request(userConfig) {
     const requestContext = {
       client: this,
       requestId: Symbol('request'),
@@ -62,6 +80,15 @@ export class ApiClient {
 
   /**
    * One attempt lifecycle; errors are routed to onError hooks which may return a replacement result or retry via ctx.retry.
+   */
+/**
+   * Dispatch a single network request through the pipeline.
+   * Handles AbortController wiring, hooks, parsing, and finalization.
+   * @param {object} config
+   * @param {object} requestContext
+   * @param {import('./ApiRequest').ApiRequest} handle
+   * @returns {Promise<any>}
+   * @private
    */
   async _dispatchRequest(config, requestContext, handle) {
     const {controller, timeoutId} = this._setupAttempt(config);
@@ -134,6 +161,12 @@ export class ApiClient {
     }
   }
 
+/**
+   * Create AbortController and timeout for a request.
+   * @param {object} config
+   * @returns {{ controller: AbortController, timeoutId: any }}
+   * @private
+   */
   _setupAttempt(config) {
     const controller = new AbortController();
     let timeoutId = null;
@@ -147,6 +180,12 @@ export class ApiClient {
     return {controller, timeoutId};
   }
 
+/**
+   * Cleanup timeout after request completes.
+   * @param {object} config
+   * @param {any} timeoutId
+   * @private
+   */
   _cleanupAttempt(config, timeoutId) {
     if (timeoutId) clearTimeout(timeoutId);
   }

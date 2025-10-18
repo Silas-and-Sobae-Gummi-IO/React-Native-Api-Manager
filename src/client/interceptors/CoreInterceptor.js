@@ -5,6 +5,10 @@ import { LoggerInterceptor } from './LoggerInterceptor'
 import { RetryInterceptor } from './RetryInterceptor'
 import { CancelKeyInterceptor } from './CancelKeyInterceptor'
 
+/**
+ * CoreInterceptor
+ * Applies defaults and registers built-in interceptors on client_init.
+ */
 export class CoreInterceptor extends BaseInterceptor {
   register(hooks, client) {
     this.hooks = hooks

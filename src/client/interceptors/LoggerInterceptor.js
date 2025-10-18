@@ -2,6 +2,10 @@
 
 import { BaseInterceptor } from './BaseInterceptor';
 
+/**
+ * LoggerInterceptor
+ * Logs request and final result when client.config.debug is true.
+ */
 export class LoggerInterceptor extends BaseInterceptor {
   register(hooks, client) {
     this.hooks = hooks;

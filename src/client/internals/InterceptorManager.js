@@ -3,6 +3,12 @@
  * - Filters transform a value via applyFilters(name, value, context)
  * - Actions observe side effects via doAction(name, payload, context)
  */
+/**
+ * InterceptorManager (Hooks engine)
+ * - addFilter/applyFilters: transform values
+ * - addAction/doAction: observe events
+ * - add(name, class|object): register an interceptor provider
+ */
 export class InterceptorManager {
   constructor(client) {
     this.client = client;
@@ -12,6 +18,13 @@ export class InterceptorManager {
   }
 
   // Filters
+/**
+   * Register a filter callback for a hook.
+   * @param {string} hookName
+   * @param {string} name
+   * @param {(value:any, context:any)=>any} callback
+   * @param {number} [priority=10]
+   */
   addFilter(hookName, name, callback, priority = 10) {
     const list = this.filters.get(hookName) || [];
     list.push({ name, cb: callback, priority });
@@ -27,6 +40,13 @@ export class InterceptorManager {
     );
   }
 
+/**
+   * Run value through registered filters.
+   * @param {string} hookName
+   * @param {any} value
+   * @param {any} context
+   * @returns {Promise<any>}
+   */
   async applyFilters(hookName, value, context) {
     const list = this.filters.get(hookName) || [];
     let out = value;
@@ -38,6 +58,9 @@ export class InterceptorManager {
   }
 
   // Actions
+/**
+   * Register an action callback for a hook.
+   */
   addAction(hookName, name, callback, priority = 10) {
     const list = this.actions.get(hookName) || [];
     list.push({ name, cb: callback, priority });
@@ -53,6 +76,9 @@ export class InterceptorManager {
     );
   }
 
+/**
+   * Invoke action callbacks for a hook.
+   */
   async doAction(hookName, payload, context) {
     const list = this.actions.get(hookName) || [];
     for (const item of list) {
@@ -61,6 +87,11 @@ export class InterceptorManager {
   }
 
   // Register an interceptor class which exposes register(hooks, client)
+/**
+   * Register an interceptor provider (class or object).
+   * @param {string} name
+   * @param {Function|object} Interceptor
+   */
   add(name, Interceptor) {
     if (this.registered.has(name)) return this.registered.get(name);
 

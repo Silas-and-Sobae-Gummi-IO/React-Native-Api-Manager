@@ -1,6 +1,14 @@
 // src/client/ApiRequest.js
 
+/**
+ * ApiRequest
+ * A thenable handle wrapping an in-flight request, exposing abort().
+ */
 export class ApiRequest {
+/**
+   * Create an ApiRequest from a factory that produces a Promise or another ApiRequest.
+   * @param {() => Promise<any> | ApiRequest} factory
+   */
   static fromPromiseFactory(factory) {
     const req = new ApiRequest();
     req._start(factory);
@@ -13,15 +21,18 @@ export class ApiRequest {
     this.id = Symbol('ApiRequest');
   }
 
-  _start = async (factory) => {
+  _start = (factory) => {
     // factory returns another ApiRequest or Promise
-    const result = await factory();
-    if (result instanceof ApiRequest) {
-      this._abort = () => result.abort();
-      this._promise = result.promise;
-    } else {
-      // result assumed to be thenable; wrap
-      this._promise = Promise.resolve(result);
+    try {
+      const result = factory();
+      if (result instanceof ApiRequest) {
+        this._abort = () => result.abort();
+        this._promise = result.promise;
+      } else {
+        this._promise = Promise.resolve(result);
+      }
+    } catch (e) {
+      this._promise = Promise.reject(e);
     }
   };
 
@@ -41,6 +52,11 @@ export class ApiRequest {
     return this._promise || Promise.reject(new Error('Request not started'));
   }
 
+/**
+   * Set the abort function wired to the underlying AbortController.
+   * @param {() => void} fn
+   * @returns {this}
+   */
   setAbort(fn) {
     this._abort = fn;
     return this;
