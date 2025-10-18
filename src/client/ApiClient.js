@@ -1,226 +1,204 @@
 // src/client/ApiClient.js
 
-import { InterceptorManager } from './internals/InterceptorManager';
-import { buildRequestConfig } from './internals/requestBuilder';
-import { parseResponse } from './internals/responseParser';
-import { ApiError } from '../core/ApiError';
-import { parseShorthandUrl, parseInterceptorShorthand } from '../utils/parser';
-import { mergeHeaders } from '../utils/headers';
-
-// --- Logger Definition ---
-const loggerInterceptor = {
-  onRequest: (config) => {
-    console.log(
-      `[API Request] ${config.method.toUpperCase()} -> ${config.url}`
-    );
-    return config;
-  },
-  onSuccess: (data) => {
-    console.log('[API Success]', data);
-    return data;
-  },
-  onError: (error) => {
-    console.log('[API Error]', error);
-    // IMPORTANT: Re-throw the error to not break the chain
-    throw error;
-  },
-};
+import {InterceptorManager} from './internals/InterceptorManager';
+import {buildRequestConfig} from './internals/requestBuilder';
+import {parseResponse} from './internals/responseParser';
+import {ApiError} from '../core/ApiError';
+import {parseShorthandUrl, parseInterceptorShorthand} from '../utils/parser';
+import {mergeHeaders} from '../utils/headers';
+import {CoreInterceptor} from './interceptors/CoreInterceptor';
+import {ApiRequest} from './ApiRequest';
 
 export class ApiClient {
   /**
-   * @param {object} config
-   * @param {string} [config.baseURL]
-   * @param {object} [config.headers]
-   * @param {number} [config.timeout]
-   * @param {'none'|'debug'} [config.logLevel]
+   * ApiClient
+   *
+   * Built-in config (documented):
+   * - baseURL?: string
+   * - headers?: Record<string,string>
+   * - timeout?: number (ms)
+   * - debug?: boolean
+   * - retry?: { attempts?: number, on?: Array<number|'network-error'>, delay?: (attempt:number)=>number }
    */
   constructor(config = {}) {
     this.config = config;
-    this.interceptors = new InterceptorManager();
+    this.interceptors = new InterceptorManager(this);
     this.cancellableRequests = new Map();
 
-    if (this.config.logLevel === 'debug') {
-      this.interceptors.add('internal-logger', loggerInterceptor, 999);
-    }
+    // Register core and fire init
+    this.interceptors.add('core', CoreInterceptor);
+    this.interceptors.doAction('client_init', this, {client: this});
   }
 
   /**
-   * Main request method, responsible for the retry loop.
-   * @private
+   * Prepare the full config by merging instance + request, then allowing interceptors to fill defaults & adjust.
    */
-  async _request(requestSpecificConfig) {
-    // Merge instance and per-request config, carefully merging headers
-    const mergedHeaders = mergeHeaders(
-      this.config.headers || {},
-      requestSpecificConfig.headers || {}
-    );
+  async _prepareConfig(userConfig, requestContext) {
+    const mergedHeaders = mergeHeaders(this.config.headers || {}, userConfig.headers || {});
+    let cfg = {...this.config, ...userConfig, headers: mergedHeaders};
+    cfg = await this.interceptors.applyFilters('config', cfg, requestContext);
+    const filteredHeaders = await this.interceptors.applyFilters('headers', cfg.headers, {...requestContext, config: cfg});
+    cfg.headers = filteredHeaders || cfg.headers;
+    return cfg;
+  }
 
-    const config = {
-      ...this.config,
-      ...requestSpecificConfig,
-      headers: mergedHeaders,
+  /**
+   * Entry point: compute final config via interceptors, then execute one attempt; retries handled by RetryInterceptor.
+   */
+  async _request(userConfig) {
+    const requestContext = {
+      client: this,
+      requestId: Symbol('request'),
+      userAborted: false,
     };
-
-    const maxRetries = config.retries ?? 0;
-    let lastError = null;
-
-    for (let attempt = 0; attempt <= maxRetries; attempt++) {
-      try {
-        return await this._executeAttempt(config);
-      } catch (error) {
-        lastError = error;
-
-        // Don't retry on our own timeout errors
-        if (error instanceof ApiError && error.message.includes('timed out')) {
-          break;
-        }
-
-        const isLastAttempt = attempt === maxRetries;
-        if (isLastAttempt) break;
-
-        const retryOn = config.retryOn ?? [];
-        const isNetworkError =
-          !error.response && retryOn.includes('network-error');
-        const isRetryableStatus =
-          error.status && retryOn.includes(error.status);
-
-        if (isNetworkError || isRetryableStatus) {
-          const delay = config.retryDelay ? config.retryDelay(attempt + 1) : 0;
-          if (delay > 0) {
-            await new Promise((resolve) => setTimeout(resolve, delay));
-          }
-        } else {
-          break;
-        }
-      }
-    }
-    const finalError = await this.interceptors.run('onError', lastError);
-    throw finalError;
+    const run = async () => {
+      const cfg = await this._prepareConfig(userConfig, requestContext);
+      requestContext.config = cfg;
+      return this._dispatchRequest(cfg, requestContext, handle);
+    };
+    const handle = ApiRequest.fromPromiseFactory(run);
+    return handle;
   }
 
   /**
-   * Orchestrates a single request attempt: setup, execution, cleanup.
-   * @private
+   * One attempt lifecycle; errors are routed to onError hooks which may return a replacement result or retry via ctx.retry.
    */
-  async _executeAttempt(config) {
-    const { controller, timeoutId } = this._setupAttempt(config);
+  async _dispatchRequest(config, requestContext, handle) {
+    const {controller, timeoutId} = this._setupAttempt(config);
+    requestContext.abortController = controller;
+    if (handle && typeof handle.setAbort === 'function') {
+      handle.setAbort(() => {
+        requestContext.userAborted = true;
+        try {
+          controller.abort('manual');
+        } catch (_) {}
+      });
+    }
+
+    // Bridge user-provided signal for manual aborts
+    if (config.signal) {
+      try {
+        config.signal.addEventListener(
+          'abort',
+          () => {
+            requestContext.userAborted = true;
+            controller.abort('manual');
+          },
+          {once: true}
+        );
+      } catch (_) {}
+    }
+
+    // Allow plugins like CancelKey to prepare per-attempt state
+    await this.interceptors.doAction('request_setup', {config}, requestContext);
+
     try {
-      return await this._performFetch(config, controller);
+      const attemptConfig = {...config, signal: controller.signal};
+      const preppedConfig = await this.interceptors.applyFilters('request', attemptConfig, requestContext);
+
+      let fetchInit = buildRequestConfig(preppedConfig);
+      fetchInit =
+        (await this.interceptors.applyFilters('before_fetch', fetchInit, {
+          ...requestContext,
+          config: preppedConfig,
+        })) || fetchInit;
+
+      const {url: finalUrl, ...fetchOptions} = fetchInit;
+      let response = await fetch(finalUrl, fetchOptions);
+      response = (await this.interceptors.applyFilters('fetch_response', response, requestContext)) || response;
+
+      let data = await parseResponse(response, preppedConfig);
+      data = (await this.interceptors.applyFilters('after_parse', data, requestContext)) || data;
+
+      const out = await this.interceptors.applyFilters('success', data, requestContext);
+      await this.interceptors.doAction('final', {ok: true, data: out}, requestContext);
+      return out;
+    } catch (error) {
+      // Manual abort: rethrow AbortError untouched
+      if (error?.name === 'AbortError' && (controller.signal.reason === 'manual' || requestContext.userAborted)) {
+        throw error;
+      }
+      // Timeout abort => wrap
+      if (error?.name === 'AbortError' && controller.signal.reason === 'timeout') {
+        error = new ApiError(`Request timed out after ${config.timeout}ms`, config);
+      }
+
+      const maybe = await this.interceptors.applyFilters('error', error, requestContext);
+      await this.interceptors.doAction('final', {ok: false, error: maybe || error}, requestContext);
+
+      if (maybe === undefined) throw error;
+      if (maybe instanceof Error) throw maybe;
+      return maybe;
     } finally {
       this._cleanupAttempt(config, timeoutId);
     }
   }
 
-  /**
-   * Handles pre-flight logic: AbortController, cancelKey, and timeout.
-   * @private
-   */
   _setupAttempt(config) {
     const controller = new AbortController();
     let timeoutId = null;
 
-    if (config.cancelKey) {
-      this.cancellableRequests.get(config.cancelKey)?.abort();
-      this.cancellableRequests.set(config.cancelKey, controller);
-    }
-
     if (config.timeout) {
       timeoutId = setTimeout(() => {
-        controller.abort('timeout'); // Pass a reason for the abort
+        controller.abort('timeout');
       }, config.timeout);
     }
 
-    return { controller, timeoutId };
+    return {controller, timeoutId};
   }
 
-  /**
-   * The core fetch pipeline for a single attempt.
-   * @private
-   */
-  async _performFetch(config, controller) {
-    const attemptConfig = { ...config, signal: controller.signal };
-    try {
-      const finalConfig = await this.interceptors.run(
-        'onRequest',
-        attemptConfig
-      );
-      const { url: finalUrl, ...fetchOptions } =
-        buildRequestConfig(finalConfig);
-      const response = await fetch(finalUrl, fetchOptions);
-      const data = await parseResponse(response, finalConfig);
-
-      let transformedData = data;
-      if (typeof finalConfig.transformResponse === 'function') {
-        transformedData = finalConfig.transformResponse(data);
-      }
-      return await this.interceptors.run('onSuccess', transformedData);
-    } catch (error) {
-      // Check if the abort was caused by our timeout
-      if (
-        error.name === 'AbortError' &&
-        controller.signal.reason === 'timeout'
-      ) {
-        throw new ApiError(
-          `Request timed out after ${config.timeout}ms`,
-          config
-        );
-      }
-      throw error; // Re-throw other errors
-    }
-  }
-
-  /**
-   * Handles post-flight cleanup: clearing timeouts and cancelKeys.
-   * @private
-   */
   _cleanupAttempt(config, timeoutId) {
     if (timeoutId) clearTimeout(timeoutId);
-    if (config.cancelKey) {
-      this.cancellableRequests.delete(config.cancelKey);
-    }
   }
 
-  // --- Public Methods ---
-  get = async (url, options = {}) =>
-    this._request({ method: 'GET', url, ...options });
-  post = async (url, body, options = {}) =>
-    this._request({ method: 'POST', url, body, ...options });
-  put = async (url, body, options = {}) =>
-    this._request({ method: 'PUT', url, body, ...options });
-  patch = async (url, body, options = {}) =>
-    this._request({ method: 'PATCH', url, body, ...options });
-  delete = async (url, options = {}) =>
-    this._request({ method: 'DELETE', url, ...options });
+  // --- Public Request Methods ---
+  get = (url, options = {}) => this._request({method: 'GET', url, ...options});
+  post = (url, body, options = {}) => this._request({method: 'POST', url, body, ...options});
+  put = (url, body, options = {}) => this._request({method: 'PUT', url, body, ...options});
+  patch = (url, body, options = {}) => this._request({method: 'PATCH', url, body, ...options});
+  delete = (url, options = {}) => this._request({method: 'DELETE', url, ...options});
 
-  request = async (shorthandUrl, ...args) => {
-    const { method, url } = parseShorthandUrl(shorthandUrl);
-    const methodsWithBody = ['post', 'put', 'patch'];
-
-    if (methodsWithBody.includes(method)) {
-      const body = args[0];
-      const options = args[1] || {};
-      return this[method](url, body, options);
-    } else {
-      const options = args[0] || {};
-      return this[method](url, options);
-    }
+  request = (shorthand, ...args) => {
+    const initial = parseShorthandUrl(shorthand);
+    const promiseParsed = this.interceptors.applyFilters('shorthand', initial, {
+      client: this,
+    });
+    // allow filters to be async; wrap in ApiRequest when resolved
+    const wrap = async () => {
+      const parsed = (await promiseParsed) || initial;
+      const bodyMethods = new Set(['post', 'put', 'patch']);
+      const [maybeBody, maybeOptions] = args;
+      const options = bodyMethods.has(parsed.method) ? maybeOptions || {} : maybeBody || {};
+      const body = bodyMethods.has(parsed.method) ? maybeBody : undefined;
+      return bodyMethods.has(parsed.method) ? this[parsed.method](parsed.url, body, options) : this[parsed.method](parsed.url, options);
+    };
+    return ApiRequest.fromPromiseFactory(wrap);
   };
 
-  configureInterceptor = (shorthand, callbacks) => {
-    const command = parseInterceptorShorthand(shorthand);
-    if (!command) {
-      throw new Error(`Invalid interceptor shorthand: ${shorthand}`);
-    }
-
-    switch (command.action) {
-      case 'add':
-        this.interceptors.add(command.name, callbacks, command.priority);
-        break;
-      case 'remove':
-        this.interceptors.remove(command.name);
-        break;
-      default:
-        throw new Error(`Unsupported interceptor action: ${command.action}`);
-    }
+  configureInterceptor = (name, InterceptorClass) => {
+    // simpler API: add/remove by name
+    if (!InterceptorClass) throw new Error('Provide an interceptor class');
+    this.interceptors.add(name, InterceptorClass);
   };
+
+  // Convenience hook registration APIs
+  addFilter = (hookName, name, callback, priority = 10) => this.interceptors.addFilter(hookName, name, callback, priority)
+  removeFilter = (hookName, name) => this.interceptors.removeFilter(hookName, name)
+  addAction = (hookName, name, callback, priority = 10) => this.interceptors.addAction(hookName, name, callback, priority)
+  removeAction = (hookName, name) => this.interceptors.removeAction(hookName, name)
+
+  abort = (handleOrId) => {
+    if (!handleOrId) return;
+    if (typeof handleOrId.abort === 'function') return handleOrId.abort();
+  };
+
+  // --- Private helpers ---
+  async _prepareConfig(userConfig, requestContext) {
+    const mergedHeaders = mergeHeaders(this.config.headers || {}, userConfig.headers || {});
+    let cfg = {...this.config, ...userConfig, headers: mergedHeaders};
+    cfg = await this.interceptors.applyFilters('config', cfg, requestContext);
+    const filteredHeaders = await this.interceptors.applyFilters('headers', cfg.headers, {...requestContext, config: cfg});
+    cfg.headers = filteredHeaders || cfg.headers;
+    return cfg;
+  }
 }

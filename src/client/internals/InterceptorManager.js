@@ -1,57 +1,89 @@
 /**
- * Manages and executes interceptors for API requests and responses.
- * Follows a pipeline pattern where data is passed through each interceptor.
+ * Hooks manager (WordPress-like): actions + filters with per-hook priorities.
+ * - Filters transform a value via applyFilters(name, value, context)
+ * - Actions observe side effects via doAction(name, payload, context)
  */
 export class InterceptorManager {
-  constructor() {
-    this.interceptors = [];
+  constructor(client) {
+    this.client = client;
+    this.filters = new Map(); // name -> [{name, cb, priority}]
+    this.actions = new Map(); // name -> [{name, cb, priority}]
+    this.registered = new Map(); // interceptorName -> instance
   }
 
-  /**
-   * Adds an interceptor to the manager.
-   * The interceptors array is kept sorted by priority.
-   * @param {string} name A unique name for the interceptor.
-   * @param {{onRequest?: Function, onSuccess?: Function, onError?: Function}} callbacks An object with interceptor functions.
-   * @param {number} priority The execution priority (lower numbers run first).
-   */
-  add(name, callbacks, priority) {
-    this.interceptors.push({ name, callbacks, priority });
-    // Keep the array sorted by priority for efficient execution
-    this.interceptors.sort((a, b) => a.priority - b.priority);
+  // Filters
+  addFilter(hookName, name, callback, priority = 10) {
+    const list = this.filters.get(hookName) || [];
+    list.push({ name, cb: callback, priority });
+    list.sort((a, b) => a.priority - b.priority);
+    this.filters.set(hookName, list);
   }
 
-  /**
-   * Removes an interceptor by its name.
-   * @param {string} name The name of the interceptor to remove.
-   */
-  remove(name) {
-    this.interceptors = this.interceptors.filter(
-      (interceptor) => interceptor.name !== name
+  removeFilter(hookName, name) {
+    const list = this.filters.get(hookName) || [];
+    this.filters.set(
+      hookName,
+      list.filter((i) => i.name !== name)
     );
   }
 
-  /**
-   * Asynchronously runs all registered interceptors for a given hook.
-   * @param {string} hookName The name of the hook to run (e.g., 'onRequest', 'onSuccess').
-   * @param {any} initialValue The initial data to pass to the first interceptor.
-   * @returns {Promise<any>} A promise that resolves with the final data after all interceptors have run.
-   */
-  async run(hookName, initialValue) {
-    // Run through interceptors in priority order, passing the value along.
-    // If an interceptor returns undefined, we keep the previous value to avoid
-    // accidentally clobbering the pipeline value (especially for onError).
-    let currentValue = initialValue;
+  async applyFilters(hookName, value, context) {
+    const list = this.filters.get(hookName) || [];
+    let out = value;
+    for (const item of list) {
+      const next = await item.cb(out, context);
+      out = next === undefined ? out : next;
+    }
+    return out;
+  }
 
-    for (const interceptor of this.interceptors) {
-      const fn = interceptor?.callbacks?.[hookName];
-      if (typeof fn !== 'function') continue;
+  // Actions
+  addAction(hookName, name, callback, priority = 10) {
+    const list = this.actions.get(hookName) || [];
+    list.push({ name, cb: callback, priority });
+    list.sort((a, b) => a.priority - b.priority);
+    this.actions.set(hookName, list);
+  }
 
-      // Await the result and preserve previous value when a handler returns undefined
-      // to support "tap" style interceptors.
-      const next = await fn(currentValue);
-      currentValue = next === undefined ? currentValue : next;
+  removeAction(hookName, name) {
+    const list = this.actions.get(hookName) || [];
+    this.actions.set(
+      hookName,
+      list.filter((i) => i.name !== name)
+    );
+  }
+
+  async doAction(hookName, payload, context) {
+    const list = this.actions.get(hookName) || [];
+    for (const item of list) {
+      await item.cb(payload, context);
+    }
+  }
+
+  // Register an interceptor class which exposes register(hooks, client)
+  add(name, Interceptor) {
+    if (this.registered.has(name)) return this.registered.get(name);
+
+    let instance;
+    if (typeof Interceptor === 'function') {
+      // class-style
+      instance = new Interceptor();
+      if (typeof instance.register === 'function') instance.register(this, this.client);
+    } else if (Interceptor && typeof Interceptor === 'object') {
+      // object-style: { filters?: {hook: fn}, actions?: {hook: fn} }
+      instance = Interceptor;
+      const { filters = {}, actions = {} } = Interceptor;
+      for (const [hook, fn] of Object.entries(filters)) {
+        this.addFilter(hook, `${name}:filter:${hook}`, fn, 10);
+      }
+      for (const [hook, fn] of Object.entries(actions)) {
+        this.addAction(hook, `${name}:action:${hook}`, fn, 10);
+      }
+    } else {
+      throw new Error('Invalid interceptor provided');
     }
 
-    return currentValue;
+    this.registered.set(name, instance);
+    return instance;
   }
 }
