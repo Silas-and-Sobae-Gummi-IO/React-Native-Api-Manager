@@ -1,35 +1,39 @@
 // src/client/interceptors/CancelKeyInterceptor.js
 
-import { BaseInterceptor } from './BaseInterceptor';
+import {BaseInterceptor} from './BaseInterceptor';
 
-/**
- * CancelKeyInterceptor
- * Aborts the previous request with the same cancelKey.
- */
 export class CancelKeyInterceptor extends BaseInterceptor {
-  register(hooks, client) {
-    this.hooks = hooks;
-    this.client = client;
+  constructor() {
+    super();
     this.map = new Map();
-
-    hooks.addAction('request_setup', 'cancelkey:setup', this._onSetup, 5);
-    hooks.addAction('final', 'cancelkey:cleanup', this._onCleanup, 50);
   }
 
-  _onSetup = ({ config }, requestContext) => {
+  register(hooks, client) {
+    hooks.addAction('request_setup', 'cancelkey:setup', this._onSetup, 5);
+    hooks.addAction('done', 'cancelkey:cleanup', this._onCleanup, 50);
+  }
+
+  _onSetup = ({config}, ctx) => {
     const key = config?.cancelKey;
     if (!key) return;
+
     const prev = this.map.get(key);
-    if (prev && prev !== requestContext.abortController) {
-      try { prev.abort('cancelKey'); } catch (_) {}
+    if (prev && prev !== ctx.abortController) {
+      try {
+        prev.abort('cancelKey');
+      } catch (_) {}
     }
-    this.map.set(key, requestContext.abortController);
+
+    this.map.set(key, ctx.abortController);
   };
 
-  _onCleanup = (payload, requestContext) => {
-    const key = requestContext?.config?.cancelKey;
+  _onCleanup = (_payload, ctx) => {
+    const key = ctx.config?.cancelKey;
     if (!key) return;
+
     const current = this.map.get(key);
-    if (current === requestContext.abortController) this.map.delete(key);
+    if (current === ctx.abortController) {
+      this.map.delete(key);
+    }
   };
 }

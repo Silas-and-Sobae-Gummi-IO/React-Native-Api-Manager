@@ -1,74 +1,64 @@
 // src/client/ApiRequest.js
 
-/**
- * ApiRequest
- * A thenable handle wrapping an in-flight request, exposing abort().
- */
 export class ApiRequest {
-/**
-   * Create an ApiRequest from a factory that produces a Promise or another ApiRequest.
-   * @param {() => Promise<any> | ApiRequest} factory
+  /**
+   * @param {object} config Request config {uri, method, params, headers, ...}
+   * @param {ApiClient} client
    */
-  static fromPromiseFactory(factory) {
-    const req = new ApiRequest();
-    req._start(factory);
-    return req;
+  constructor(config, client) {
+    this.client = client;
+    this.config = config;
+    this._context = {}; // per-request context for interceptors
+    this._abortController = config.abortController || null;
   }
 
-  constructor() {
-    this._abort = null;
-    this._promise = null;
-    this._pendingAbort = false;
-    this.id = Symbol('ApiRequest');
+  /**
+   * Abort the request
+   */
+  abort(reason = 'manual') {
+    if (this._abortController) this._abortController.abort(reason);
   }
 
-  _start = (factory) => {
-    // factory returns another ApiRequest or Promise
+  /**
+   * Send the request
+   * @param {object} overrides Only overrides POST body or params
+   */
+  async send(overrides = {}) {
+    // Merge overrides into params/body only
+    const mergedConfig = {...this.config, ...overrides};
+    this._context.config = mergedConfig;
+    this._abortController ||= new AbortController();
+    this._context.abortController = this._abortController;
+
+    // Run setup hook
+    await this.client.interceptors.run('request_setup', mergedConfig, this._context);
+
+    // Run before_fetch filters
+    const finalConfig = await this.client.interceptors.run('before_fetch', mergedConfig, this._context);
+
+    let res, data, error;
     try {
-      const result = factory();
-      if (result instanceof ApiRequest) {
-        this._abort = () => result.abort();
-        this._promise = result.promise;
-      } else {
-        this._promise = Promise.resolve(result);
-      }
-    } catch (e) {
-      this._promise = Promise.reject(e);
+      const url = finalConfig.uri.startsWith('http') ? finalConfig.uri : (this.client.config.baseUrl || '') + finalConfig.uri;
+
+      const fetchOptions = {
+        method: finalConfig.method,
+        headers: {...(this.client.config.headers || {}), ...(finalConfig.headers || {})},
+        body: finalConfig.body ? JSON.stringify(finalConfig.body) : undefined,
+        signal: this._abortController,
+      };
+
+      res = await fetch(url, fetchOptions);
+      data = await res.json().catch(() => null);
+    } catch (err) {
+      error = err;
     }
-  };
 
-  then(onFulfilled, onRejected) {
-    return this.promise.then(onFulfilled, onRejected);
-  }
+    const payload = error ? {ok: false, error} : {ok: true, data, status: res?.status};
 
-  catch(onRejected) {
-    return this.promise.catch(onRejected);
-  }
+    // Run final hook
+    await this.client.interceptors.run('final', payload, this._context);
 
-  finally(onFinally) {
-    return this.promise.finally(onFinally);
-  }
-
-  get promise() {
-    return this._promise || Promise.reject(new Error('Request not started'));
-  }
-
-/**
-   * Set the abort function wired to the underlying AbortController.
-   * @param {() => void} fn
-   * @returns {this}
-   */
-  setAbort(fn) {
-    this._abort = fn;
-    if (this._pendingAbort) {
-      this._pendingAbort = false;
-      try { this._abort(); } catch (_) {}
-    }
-    return this;
-  }
-
-  abort() {
-    if (this._abort) this._abort();
-    else this._pendingAbort = true;
+    if (error) throw error;
+    return payload;
   }
 }
