@@ -10,7 +10,8 @@ export class LoggerInterceptor extends BaseInterceptor {
   register(hooks, client) {
     this.hooks = hooks;
     this.client = client;
-    hooks.addAction('before_fetch', 'logger:req', this._onBeforeFetch, 999);
+    hooks.addAction('request_setup', 'logger:setup', this._onSetup, 900);
+    hooks.addFilter('before_fetch', 'logger:req', this._onBeforeFetch, 999);
     hooks.addAction('final', 'logger:final', this._onFinal, 999);
   }
 
@@ -18,13 +19,23 @@ export class LoggerInterceptor extends BaseInterceptor {
     return !!this.client.config?.debug;
   }
 
-  _onBeforeFetch = (fetchInit, context) => {
+  _onSetup = ({ config }) => {
     if (!this._shouldLog()) return;
+    try {
+      const method = String(config?.method || '').toUpperCase();
+      const url = config?.url;
+      console.log(`[API Request] ${method} -> ${url}`);
+    } catch (_) {}
+  };
+
+  _onBeforeFetch = (fetchInit, context) => {
+    if (!this._shouldLog()) return fetchInit;
     try {
       const method = String(context?.config?.method || fetchInit?.method || '').toUpperCase();
       const url = context?.config?.url || fetchInit?.url;
       console.log(`[API Request] ${method} -> ${url}`);
     } catch (_) {}
+    return fetchInit;
   };
 
   _onFinal = (payload) => {

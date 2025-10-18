@@ -69,12 +69,13 @@ export class ApiClient {
       requestId: Symbol('request'),
       userAborted: false,
     };
+    const handle = new ApiRequest();
     const run = async () => {
       const cfg = await this._prepareConfig(userConfig, requestContext);
       requestContext.config = cfg;
       return this._dispatchRequest(cfg, requestContext, handle);
     };
-    const handle = ApiRequest.fromPromiseFactory(run);
+    handle._start(run);
     return handle;
   }
 

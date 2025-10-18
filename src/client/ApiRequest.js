@@ -18,6 +18,7 @@ export class ApiRequest {
   constructor() {
     this._abort = null;
     this._promise = null;
+    this._pendingAbort = false;
     this.id = Symbol('ApiRequest');
   }
 
@@ -59,10 +60,15 @@ export class ApiRequest {
    */
   setAbort(fn) {
     this._abort = fn;
+    if (this._pendingAbort) {
+      this._pendingAbort = false;
+      try { this._abort(); } catch (_) {}
+    }
     return this;
   }
 
   abort() {
     if (this._abort) this._abort();
+    else this._pendingAbort = true;
   }
 }
