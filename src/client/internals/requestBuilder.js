@@ -34,23 +34,19 @@ function containsFile(data) {
  * @returns {{url: string, options: object}} The final URL and fetch options.
  */
 export function buildRequestConfig(config) {
-  // FIX #1: Use robust string joining instead of `new URL()`
-  const combinedUrl = `${config.baseURL.replace(/\/$/, '')}/${config.url.replace(
-    /^\//,
-    ''
-  )}`;
+  // Join baseURL and url when baseURL is provided; otherwise use url as-is
+  const combinedUrl = config.baseURL
+    ? `${String(config.baseURL).replace(/\/$/, '')}/${String(config.url).replace(/^\//, '')}`
+    : String(config.url);
 
   const queryString = serializeParams(config.params);
   const urlWithParams = `${combinedUrl}${queryString}`;
 
-  const finalHeaders = mergeHeaders(
-    config.defaultHeaders,
-    config.instanceHeaders,
-    config.requestHeaders
-  );
+  // Headers: accept a single merged headers object from the caller
+  const finalHeaders = mergeHeaders(config.headers || {});
 
   const fetchOptions = {
-    method: config.method.toUpperCase(),
+    method: String(config.method).toUpperCase(),
     headers: finalHeaders,
     signal: config.signal,
   };

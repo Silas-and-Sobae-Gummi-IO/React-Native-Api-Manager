@@ -154,4 +154,19 @@ describe('buildRequestConfig - Composes the final config for a fetch request', (
     const { body: finalBody } = buildRequestConfig(config);
     expect(finalBody).toBeInstanceOf(FormData);
   });
+
+  it('should convert to FormData for deeply nested file-like objects', () => {
+    const deepFile = { uri: 'file:///deep.bin', name: 'deep.bin', type: 'application/octet-stream' };
+    const body = {
+      meta: { tags: ['a', 'b'] },
+      payload: {
+        sections: [
+          { info: { id: 1 } },
+          { info: { id: 2, blob: deepFile } },
+        ],
+      },
+    };
+    const { body: finalBody } = buildRequestConfig({ method: 'POST', url: '/deep', baseURL, body });
+    expect(finalBody).toBeInstanceOf(FormData);
+  });
 });

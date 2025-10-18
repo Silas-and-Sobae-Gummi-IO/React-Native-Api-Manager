@@ -101,5 +101,24 @@ describe('InterceptorManager - Manages and executes interceptor pipelines', () =
       const result = await manager.run('onRequest', initialConfig);
       expect(result).toBe(initialConfig);
     });
+
+    it('should preserve the current value when an interceptor returns undefined (tap)', async () => {
+      const initial = { headers: {} };
+      manager.add(
+        'a',
+        { onRequest: (cfg) => ({ ...cfg, headers: { ...cfg.headers, A: 1 } }) },
+        10
+      );
+      // This interceptor does not return a value, acting as a tap
+      manager.add('tap', { onRequest: () => undefined }, 15);
+      manager.add(
+        'b',
+        { onRequest: (cfg) => ({ ...cfg, headers: { ...cfg.headers, B: 2 } }) },
+        20
+      );
+
+      const out = await manager.run('onRequest', initial);
+      expect(out.headers).toEqual({ A: 1, B: 2 });
+    });
   });
 });

@@ -5,6 +5,7 @@ import { buildRequestConfig } from './internals/requestBuilder';
 import { parseResponse } from './internals/responseParser';
 import { ApiError } from '../core/ApiError';
 import { parseShorthandUrl, parseInterceptorShorthand } from '../utils/parser';
+import { mergeHeaders } from '../utils/headers';
 
 // --- Logger Definition ---
 const loggerInterceptor = {
@@ -26,6 +27,13 @@ const loggerInterceptor = {
 };
 
 export class ApiClient {
+  /**
+   * @param {object} config
+   * @param {string} [config.baseURL]
+   * @param {object} [config.headers]
+   * @param {number} [config.timeout]
+   * @param {'none'|'debug'} [config.logLevel]
+   */
   constructor(config = {}) {
     this.config = config;
     this.interceptors = new InterceptorManager();
@@ -41,7 +49,18 @@ export class ApiClient {
    * @private
    */
   async _request(requestSpecificConfig) {
-    const config = { ...this.config, ...requestSpecificConfig };
+    // Merge instance and per-request config, carefully merging headers
+    const mergedHeaders = mergeHeaders(
+      this.config.headers || {},
+      requestSpecificConfig.headers || {}
+    );
+
+    const config = {
+      ...this.config,
+      ...requestSpecificConfig,
+      headers: mergedHeaders,
+    };
+
     const maxRetries = config.retries ?? 0;
     let lastError = null;
 

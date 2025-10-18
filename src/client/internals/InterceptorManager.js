@@ -37,19 +37,19 @@ export class InterceptorManager {
    * @returns {Promise<any>} A promise that resolves with the final data after all interceptors have run.
    */
   async run(hookName, initialValue) {
-    // Create a pipeline (a chain of promises) from the interceptors
-    // This is more efficient than filtering the array every time.
+    // Run through interceptors in priority order, passing the value along.
+    // If an interceptor returns undefined, we keep the previous value to avoid
+    // accidentally clobbering the pipeline value (especially for onError).
     let currentValue = initialValue;
 
     for (const interceptor of this.interceptors) {
-      // Check if the current interceptor has a function for the specified hook
-      if (
-        interceptor.callbacks &&
-        typeof interceptor.callbacks[hookName] === 'function'
-      ) {
-        // Await the result of the interceptor before proceeding to the next one
-        currentValue = await interceptor.callbacks[hookName](currentValue);
-      }
+      const fn = interceptor?.callbacks?.[hookName];
+      if (typeof fn !== 'function') continue;
+
+      // Await the result and preserve previous value when a handler returns undefined
+      // to support "tap" style interceptors.
+      const next = await fn(currentValue);
+      currentValue = next === undefined ? currentValue : next;
     }
 
     return currentValue;
