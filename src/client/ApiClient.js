@@ -1,43 +1,41 @@
 // src/client/ApiClient.js
 
-import {ApiRequest} from './ApiRequest';
-import {InterceptorManager} from './InterceptorManager';
+import {InterceptorManager} from './internals/InterceptorManager';
+import {parseShorthandUrl} from '../utils/parser';
 import {CoreInterceptor} from './interceptors/CoreInterceptor';
+import {ApiRequest} from './ApiRequest';
 
 export class ApiClient {
-  /**
-   * @param {object} config Global config for this client
-   *  { baseUrl, headers, hooks: {}, interceptors: [] }
-   */
   constructor(config = {}) {
     this.config = config;
     this.interceptors = new InterceptorManager(this);
 
-    // Register core interceptor
-    this.interceptors.add('core', CoreInterceptor);
-
-    // Register any user-provided interceptors
-    if (Array.isArray(config.interceptors)) {
-      for (const interceptor of config.interceptors) {
-        this.interceptors.add(interceptor.constructor?.name || 'user', interceptor);
-      }
-    }
-
-    // Run client_init hooks
-    this.interceptors.run('client_init', this);
+    // Register core and fire init
+    this._registerInterceptorsAndHooks();
+    this.interceptors.run('client:init', this, {client: this});
   }
 
-  // Convenience methods
-  get(config) {
-    return new ApiRequest({...config, method: 'GET'}, this);
+  get = (url, options = {}) => this._request({method: 'GET', url, ...options});
+  post = (url, body, options = {}) => this._request({method: 'POST', url, body, ...options});
+  put = (url, body, options = {}) => this._request({method: 'PUT', url, body, ...options});
+  patch = (url, body, options = {}) => this._request({method: 'PATCH', url, body, ...options});
+  delete = (url, options = {}) => this._request({method: 'DELETE', url, ...options});
+  request = (url, options = {}) => this._request({...options, ...parseShorthandUrl(url)});
+
+  _registerInterceptorsAndHooks() {
+    this.interceptors.attach(CoreInterceptor);
+
+    (config?.interceptors || []).forEach((i) => this.interceptors.attach(i));
+
+    Object.entries(config?.hooks || {}).forEach(([key, value]) => {
+      // onSuccess[key]@2o, -onSuccess[key], ~onSuccess[key]
+      const [name, callback, priority = 10] = value;
+      this.interceptors.add(key, name, callback, priority);
+    });
   }
-  post(config) {
-    return new ApiRequest({...config, method: 'POST'}, this);
-  }
-  put(config) {
-    return new ApiRequest({...config, method: 'PUT'}, this);
-  }
-  delete(config) {
-    return new ApiRequest({...config, method: 'DELETE'}, this);
+
+  async _request(config) {
+    const request = new ApiRequest(this, config);
+    return await request.init();
   }
 }

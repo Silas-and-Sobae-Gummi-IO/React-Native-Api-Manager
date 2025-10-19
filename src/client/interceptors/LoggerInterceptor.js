@@ -2,46 +2,38 @@
 import {BaseInterceptor} from './BaseInterceptor';
 
 export class LoggerInterceptor extends BaseInterceptor {
-  register(hooks, client) {
-    this.client = client;
+  static name = 'logger';
 
-    hooks.add('request_setup', 'logger:setup', this._onSetup.bind(this), 900);
-    hooks.add('before_fetch', 'logger:req', this._onBeforeFetch.bind(this), 999);
-    hooks.add('final', 'logger:final', this._onFinal.bind(this), 999);
+  register() {
+    this._manager.add('request:options', 'logger:opts', this._onSetup.bind(this), 900);
+    this._manager.add('request:beforeRequest', 'logger:req', this._onBeforeRequest.bind(this), 999);
+    this._manager.add('request:onResponse', 'logger:res', this._onResponse.bind(this), 999);
   }
 
-  _shouldLog() {
-    return !!this.client.config?.debug;
+  _shouldLog(scope = null) {
+    if (!this._client?.config?.debug.enable) {
+      return false;
+    }
+
+    const clientScope = this._client?.config?.debug.scope;
+    return scope === null ? true : clientScope === '*' || clientScope.includes(scope);
   }
 
   _onSetup(config) {
-    if (!this._shouldLog()) return;
-    try {
-      const method = String(config?.method || '').toUpperCase();
-      const url = config?.url;
-      console.log(`[API Request] ${method} -> ${url}`);
-    } catch {}
-    return config;
+    return {
+      ...config,
+      debug: {
+        enable: true,
+        scope: '*',
+      },
+    };
   }
 
-  _onBeforeFetch(fetchInit, {config}) {
-    if (!this._shouldLog()) return fetchInit;
-    try {
-      const method = String(config?.method || fetchInit?.method || '').toUpperCase();
-      const url = config?.url || fetchInit?.url;
-      console.log(`[API Request] ${method} -> ${url}`);
-    } catch {}
-    return fetchInit;
+  _onBeforeRequest({options, url}) {
+    this._shouldLog() && console.log(`[API beforeFetch] ${options.method.toUpperCase()} -> ${url}`);
   }
 
-  _onFinal(payload) {
-    if (!this._shouldLog()) return;
-    try {
-      if (payload.ok) {
-        console.log('[API Success]', payload.data);
-      } else {
-        console.log('[API Error]', payload.error);
-      }
-    } catch {}
+  _onResponse(payload) {
+    this._shouldLog() && console.log(`[API Response] ${payload.ok ? 'success' : 'error'}`, payload);
   }
 }

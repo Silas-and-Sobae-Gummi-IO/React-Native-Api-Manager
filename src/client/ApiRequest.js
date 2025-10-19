@@ -1,64 +1,61 @@
 // src/client/ApiRequest.js
 
+import {buildRequestConfig} from './internals/requestBuilder';
+import {mergeHeaders} from './../utils/headers';
+
 export class ApiRequest {
-  /**
-   * @param {object} config Request config {uri, method, params, headers, ...}
-   * @param {ApiClient} client
-   */
-  constructor(config, client) {
-    this.client = client;
-    this.config = config;
-    this._context = {}; // per-request context for interceptors
-    this._abortController = config.abortController || null;
+  constructor(client, config) {
+    this._client = client;
+    this._config = config;
   }
 
-  /**
-   * Abort the request
-   */
+  async init() {
+    this._context = await this._runInterceptors('request:context', {value: {}});
+    this._abortController = new AbortController();
+    return this;
+  }
+
+  async send(overrides = {}) {
+    const {url, options} = await this._runInterceptors('request:options', this._prepareConfigs(overrides));
+    await this._runInterceptors('request:beforeRequest', undefined, {url, options});
+
+    try {
+      let response = await fetch(url, options);
+      response = await this._runInterceptors('request:formatResponse', response);
+      await this._runInterceptors('request:onResponse', response);
+
+      return await this._runInterceptors('request:formatData', response);
+    } catch (error) {
+      error = await this._runInterceptors('request:formatError', error);
+      await this._runInterceptors('request:onError', error);
+      const needRethrow = await this._runInterceptors('request:rethrowError', false, {error});
+      if (needRethrow !== false) throw needRethrow;
+    } finally {
+      await this._runInterceptors('request:comlete');
+    }
+  }
+
   abort(reason = 'manual') {
     if (this._abortController) this._abortController.abort(reason);
   }
 
-  /**
-   * Send the request
-   * @param {object} overrides Only overrides POST body or params
-   */
-  async send(overrides = {}) {
-    // Merge overrides into params/body only
-    const mergedConfig = {...this.config, ...overrides};
-    this._context.config = mergedConfig;
-    this._abortController ||= new AbortController();
-    this._context.abortController = this._abortController;
+  _prepareConfigs(overrides) {
+    const headers = mergeHeaders(this._client.config.headers, this._config.headers, overrides.headers);
 
-    // Run setup hook
-    await this.client.interceptors.run('request_setup', mergedConfig, this._context);
+    return buildRequestConfig({
+      signal: this._abortController.signal,
+      ...this._client.config,
+      ...this._config,
+      body: {
+        ...this._client.config.body,
+        ...this._config.body,
+        ...overrides,
+      },
+      headers,
+    });
+  }
 
-    // Run before_fetch filters
-    const finalConfig = await this.client.interceptors.run('before_fetch', mergedConfig, this._context);
-
-    let res, data, error;
-    try {
-      const url = finalConfig.uri.startsWith('http') ? finalConfig.uri : (this.client.config.baseUrl || '') + finalConfig.uri;
-
-      const fetchOptions = {
-        method: finalConfig.method,
-        headers: {...(this.client.config.headers || {}), ...(finalConfig.headers || {})},
-        body: finalConfig.body ? JSON.stringify(finalConfig.body) : undefined,
-        signal: this._abortController,
-      };
-
-      res = await fetch(url, fetchOptions);
-      data = await res.json().catch(() => null);
-    } catch (err) {
-      error = err;
-    }
-
-    const payload = error ? {ok: false, error} : {ok: true, data, status: res?.status};
-
-    // Run final hook
-    await this.client.interceptors.run('final', payload, this._context);
-
-    if (error) throw error;
-    return payload;
+  _runInterceptors(name, value = undefined, additionalContext = {}) {
+    return this._client.interceptors.run(name, value, {client: this._client, config: this._config, context: this._context, ...additionalContext});
   }
 }

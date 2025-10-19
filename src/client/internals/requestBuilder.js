@@ -1,7 +1,7 @@
 // src/client/internals/requestBuilder.js
 
-import { serializeParams } from '../../utils/url';
-import { mergeHeaders } from '../../utils/headers';
+import {serializeParams} from '../../utils/url';
+import {mergeHeaders} from '../../utils/headers';
 
 // isReactNativeFile and containsFile functions remain the same
 function isReactNativeFile(value) {
@@ -35,9 +35,7 @@ function containsFile(data) {
  */
 export function buildRequestConfig(config) {
   // Join baseURL and url when baseURL is provided; otherwise use url as-is
-  const combinedUrl = config.baseURL
-    ? `${String(config.baseURL).replace(/\/$/, '')}/${String(config.url).replace(/^\//, '')}`
-    : String(config.url);
+  const combinedUrl = config.baseURL ? `${String(config.baseURL).replace(/\/$/, '')}/${String(config.url).replace(/^\//, '')}` : String(config.url);
 
   const queryString = serializeParams(config.params);
   const urlWithParams = `${combinedUrl}${queryString}`;
@@ -81,6 +79,6 @@ export function buildRequestConfig(config) {
 
   return {
     url: urlWithParams,
-    ...fetchOptions,
+    options: fetchOptions,
   };
 }
