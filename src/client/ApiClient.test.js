@@ -2,6 +2,7 @@
 
 import {ApiClient} from './ApiClient';
 import {ApiError} from '../core/ApiError';
+import {BaseInterceptor} from './interceptors/BaseInterceptor';
 
 describe('ApiClient', () => {
   let mockFetch;
@@ -47,6 +48,48 @@ describe('ApiClient', () => {
       // CoreInterceptor and LoggerInterceptor should be attached by their static names
       expect(client.interceptors.providers.has('core')).toBe(true);
       expect(client.interceptors.providers.has('logger')).toBe(true);
+    });
+
+    it('attaches custom interceptors from config', () => {
+      class CustomInterceptor extends BaseInterceptor {
+        static name = 'custom';
+        register() {}
+      }
+
+      const client = new ApiClient({
+        interceptors: [CustomInterceptor],
+      });
+
+      expect(client.interceptors.providers.has('custom')).toBe(true);
+    });
+
+    it('allows removing built-in interceptors via config', () => {
+      const client = new ApiClient({
+        interceptors: ['-logger'],
+      });
+
+      expect(client.interceptors.providers.has('core')).toBe(true);
+      expect(client.interceptors.providers.has('logger')).toBe(false);
+    });
+
+    it('supports mixed attach/detach in interceptors config', () => {
+      class Custom1 extends BaseInterceptor {
+        static name = 'custom1';
+        register() {}
+      }
+      class Custom2 extends BaseInterceptor {
+        static name = 'custom2';
+        register() {}
+      }
+
+      const client = new ApiClient({
+        interceptors: [Custom1, '-logger', Custom2],
+      });
+
+      expect(client.interceptors.providers.has('core')).toBe(true);
+      expect(client.interceptors.providers.has('logger')).toBe(false);
+      expect(client.interceptors.providers.has('custom1')).toBe(true);
+      expect(client.interceptors.providers.has('custom2')).toBe(true);
     });
   });
 
