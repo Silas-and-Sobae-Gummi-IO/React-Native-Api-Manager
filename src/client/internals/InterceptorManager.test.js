@@ -52,6 +52,7 @@ describe('InterceptorManager', () => {
         name: 'my-hook',
         callback,
         priority: 10,
+        _provider: null, // No provider context when adding hooks manually
       });
     });
 
@@ -147,6 +148,20 @@ describe('InterceptorManager', () => {
       expect(hooks[0].name).toBe('mock1:action');
     });
 
+    it('tracks provider ownership on hooks registered during init', () => {
+      manager.attach(MockInterceptor1);
+
+      const hooks = manager.hooks.get('test:hook');
+      expect(hooks[0]._provider).toBe('MockInterceptor1');
+    });
+
+    it('sets _provider to null for manually added hooks', () => {
+      manager.add('custom:hook', 'manual-hook', jest.fn());
+
+      const hooks = manager.hooks.get('custom:hook');
+      expect(hooks[0]._provider).toBeNull();
+    });
+
     it('uses static name property if available', () => {
       class NamedInterceptor extends BaseInterceptor {
         static name = 'custom-name';
@@ -230,15 +245,16 @@ describe('InterceptorManager', () => {
       expect(manager.hooks.get('test:hook')).toHaveLength(0);
     });
 
-    it('removes only hooks with matching provider prefix', () => {
-      manager.attach(MockInterceptor1); // Adds 'mock1:action'
-      manager.add('test:hook', 'custom:action', jest.fn()); // Different prefix
+    it('removes only hooks owned by the provider, not manually added hooks', () => {
+      manager.attach(MockInterceptor1); // Adds hook with _provider='MockInterceptor1'
+      manager.add('test:hook', 'custom:action', jest.fn()); // Adds hook with _provider=null
 
       manager.detach('MockInterceptor1');
 
       const hooks = manager.hooks.get('test:hook');
       expect(hooks).toHaveLength(1);
       expect(hooks[0].name).toBe('custom:action');
+      expect(hooks[0]._provider).toBeNull(); // Verify it's the manual hook that remains
     });
 
     it('handles detaching non-existent provider gracefully', () => {
