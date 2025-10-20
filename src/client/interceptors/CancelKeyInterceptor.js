@@ -33,14 +33,16 @@ export class CancelKeyInterceptor extends BaseInterceptor {
   }
 
   _setDefaults(config) {
+    // Don't override user-provided cancelKey
     return {
       ...config,
-      cancelKey: null,
+      cancelKey: config.cancelKey !== undefined ? config.cancelKey : null,
     };
   }
 
   _onSetup(hookContext) {
     // request:init receives undefined as value, hookContext is first param
+    // Note: config from hookContext is the request-level config, not merged yet
     const {config, request} = hookContext;
     const cancelKey = config?.cancelKey;
 
@@ -64,8 +66,9 @@ export class CancelKeyInterceptor extends BaseInterceptor {
 
   _onCleanup(hookContext) {
     // request:complete is called with undefined value, so hookContext is the first param
-    const {config, request} = hookContext;
-    const cancelKey = config?.cancelKey;
+    // Get cancelKey from context.config (merged config) not hookContext.config
+    const {context, request} = hookContext;
+    const cancelKey = context.config?.cancelKey;
 
     if (!cancelKey) {
       return;

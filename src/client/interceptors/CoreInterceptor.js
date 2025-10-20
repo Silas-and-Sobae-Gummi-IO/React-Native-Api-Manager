@@ -4,6 +4,9 @@ import {BaseInterceptor} from './BaseInterceptor';
 import {LoggerInterceptor} from './LoggerInterceptor';
 import {StatusHandlerInterceptor} from './StatusHandlerInterceptor';
 import {CancelKeyInterceptor} from './CancelKeyInterceptor';
+// import {MetricsInterceptor} from './MetricsInterceptor';
+// import {CacheInterceptor} from './CacheInterceptor';
+// import {RateLimitInterceptor} from './RateLimitInterceptor';
 import {parseResponse} from '../lib/responseParser';
 // import {RetryInterceptor} from './RetryInterceptor';
 
@@ -19,6 +22,10 @@ export class CoreInterceptor extends BaseInterceptor {
     this._manager.attach(LoggerInterceptor);
     this._manager.attach(StatusHandlerInterceptor);
     this._manager.attach(CancelKeyInterceptor);
+    // TODO: Re-enable after ConfigManager refactor
+    // this._manager.attach(MetricsInterceptor);
+    // this._manager.attach(CacheInterceptor);
+    // this._manager.attach(RateLimitInterceptor);
     // this._manager.attach(RetryInterceptor);
 
     // Set default config for JSON APIs

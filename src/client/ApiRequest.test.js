@@ -78,10 +78,6 @@ describe('ApiRequest', () => {
           this._manager.add('request:init', 'track:init', () => {
             executionOrder.push('init');
           });
-          this._manager.add('request:options', 'track:options', (config) => {
-            executionOrder.push('options');
-            return config;
-          });
           this._manager.add('request:beforeRequest', 'track:before', () => {
             executionOrder.push('beforeRequest');
           });
@@ -111,7 +107,6 @@ describe('ApiRequest', () => {
 
       expect(executionOrder).toEqual([
         'init',
-        'options',
         'beforeRequest',
         'formatResponse',
         'onResponse',
@@ -177,7 +172,7 @@ describe('ApiRequest', () => {
     });
   });
 
-  describe('_prepareConfigs()', () => {
+  describe('Config merging via ConfigManager', () => {
     it('merges headers from defaults, client, and request config', async () => {
       const client = new ApiClient({
         headers: {authorization: 'Bearer token'},
