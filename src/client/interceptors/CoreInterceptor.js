@@ -31,7 +31,7 @@ export class CoreInterceptor extends BaseInterceptor {
   _setDefaults(config) {
     return {
       ...config,
-      autoFixJson: config.autoFixJson ?? true,
+      autoFixJson: true,
       headers: {
         accept: 'application/json',
         ...config.headers,

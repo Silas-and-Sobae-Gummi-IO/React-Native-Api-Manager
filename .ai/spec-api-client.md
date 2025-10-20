@@ -34,6 +34,7 @@ A modern, framework-agnostic HTTP client with a clean interceptor-based architec
 ### Client Layer
 - **src/client/ApiClient.js** — Public API; request factory methods (get/post/put/patch/delete/request)
 - **src/client/ApiRequest.js** — Request handle with init(), send(), abort(); orchestrates hook lifecycle
+  - Context is instance-level: initialized in init(), persists across multiple send() calls
 - **src/client/ApiError.js** — Standard error with config/response/status properties
 
 ### Interceptor System
@@ -61,6 +62,7 @@ new ApiClient(config?)
 **Config Options:**
 - `baseURL?: string` — Base URL for relative paths
 - `headers?: Record<string, string>` — Default headers for all requests
+- `body?: Record<string, any>` — Default body properties for all requests (plain object only, no FormData)
 - `timeout?: number` — Request timeout in milliseconds
 - `debug?: { enable: boolean, scope?: string | string[] | '*' }` — Debug logging config
 - `autoFixJson?: boolean` — Auto-fix malformed JSON responses (default: true)
@@ -107,7 +109,7 @@ client.interceptors.remove(hookName, name)
                      │
                      ▼
         ┌────────────────────────┐
-        │  request:context       │  Build request context
+        │  request:init          │  Early initialization hook
         └────────┬───────────────┘
                  │
                  ▼
@@ -168,7 +170,7 @@ client.interceptors.remove(hookName, name)
 
 **Lifecycle Hooks:**
 - `client:init` — Fired in ApiClient constructor; Core attaches built-ins here
-- `request:context` — Build initial context object (can be used to store request-scoped data)
+- `request:init` — Early initialization hook before config processing (for setup tasks like cancelKey)
 - `request:defaultConfig` — Apply default configuration values
 - `request:options` — Transform final {url, options} before fetch
 - `request:beforeRequest` — Pre-fetch notification (receives {url, options})
@@ -192,7 +194,7 @@ callback(context) => void
 {
   client: ApiClient,     // Client instance
   config: Object,        // Request config
-  context: Object,       // Request-scoped data
+  context: Object,       // Instance-level context (persists across send() calls)
   request: ApiRequest,   // Request instance (in some hooks)
   url: string,          // Final URL (in beforeRequest)
   options: Object,      // Fetch options (in beforeRequest)
@@ -226,7 +228,7 @@ class CustomInterceptor extends BaseInterceptor {
 
 **CoreInterceptor** (always attached)
 - Registers: LoggerInterceptor, StatusHandlerInterceptor, CancelKeyInterceptor
-- Sets defaults: `autoFixJson: true`, `Accept: application/json` header
+- Sets defaults: `autoFixJson: true`, `cancelKey: null`, `Accept: application/json` header
 - Wires response parsing via `formatData` hook
 
 **LoggerInterceptor** (priority 900+)
@@ -240,9 +242,10 @@ class CustomInterceptor extends BaseInterceptor {
 - Hook: `request:formatResponse`
 
 **CancelKeyInterceptor** (priority 1 setup, 999 cleanup)
-- Auto-aborts previous request with same `cancelKey`
+- Auto-aborts previous request with same `cancelKey` (last-one-wins strategy)
+- Latest request with the same key cancels all previous pending requests
 - Cleans up map after request completes
-- Hooks: `request:context`, `request:complete`
+- Hooks: `request:init`, `request:complete`
 
 ---
 
@@ -261,12 +264,19 @@ try {
 }
 ```
 
-**CancelKey usage:**
+**CancelKey usage (Last-One-Wins):**
 ```js path=null start=null
 // Search autocomplete - only latest request executes
 client.get('/search', { cancelKey: 'search', params: { q: 'a' } });
 client.get('/search', { cancelKey: 'search', params: { q: 'ab' } });  // Cancels first
 client.get('/search', { cancelKey: 'search', params: { q: 'abc' } }); // Cancels second
+
+// When 5 requests fire simultaneously:
+for (let i = 1; i <= 5; i++) {
+  client.get('/api', { cancelKey: 'same-key' }).send();
+}
+// Requests 1-4 get aborted, only request 5 completes
+// (NOT first-one-wins - the LATEST request wins)
 ```
 
 ---
@@ -311,6 +321,17 @@ const request = client.post('/users', { name: 'Initial' });
 
 // Override body properties
 await request.send({ name: 'Updated', email: 'new@example.com' });
+```
+
+### Client-Level Body
+```js path=null start=null
+// Useful for adding default properties to all requests
+const client = new ApiClient({
+  body: { is_super_admin: true }
+});
+
+await client.post('/users', { name: 'John' }).send();
+// Sends: { is_super_admin: true, name: 'John' }
 ```
 
 ### FormData Upload
@@ -430,19 +451,19 @@ const result = await client.get('/maybe-exists').send();
 
 All core modules are fully tested:
 
-- **ApiClient.test.js** (38 tests) — HTTP methods, config merging, interceptor registration
+- **ApiClient.test.js** (40 tests) — HTTP methods, config merging, interceptor registration, body validation
 - **ApiClient.expert.test.js** (5 tests) — Advanced scenarios, custom interceptors
-- **ApiRequest.test.js** (29 tests) — Lifecycle, hooks, error handling, context passing
+- **ApiRequest.test.js** (30 tests) — Lifecycle, hooks, error handling, context persistence
 - **InterceptorManager.test.js** (45 tests) — Hook management, priority, attach/detach
 - **LoggerInterceptor.test.js** (14 tests) — Debug logging, scope filtering
 - **CancelKeyInterceptor.test.js** (17 tests) — Cancellation, cleanup, edge cases
 - **StatusHandlerInterceptor.test.js** (8 tests) — Status handlers, early returns
-- **CoreInterceptor.test.js** (8 tests) — Defaults, built-in registration
+- **CoreInterceptor.test.js** (10 tests) — Defaults, built-in registration
 - **responseParser.test.js** (19 tests) — JSON parsing, autoFixJson, error handling
 - **requestBuilder.test.js** (8 tests) — URL building, params, FormData
 - **ApiError.test.js** (2 tests) — Error structure
 
-**Total: 203 tests passing**
+**Total: 253 tests passing** (includes Agent tests)
 
 ---
 
@@ -478,6 +499,7 @@ All core modules are fully tested:
 5. **Testing First** — All features are thoroughly tested
 6. **Performance** — Minimal overhead; hooks only run when registered
 7. **Framework Agnostic** — No React/framework dependencies in core
+8. **Early Validation** — Invalid configs throw errors at construction time (e.g., FormData at client level)
 
 ---
 
@@ -524,4 +546,4 @@ const data = await client.get('/users').send();
 
 ---
 
-*Last Updated: Based on implementation as of 203 passing tests*
+*Last Updated: January 2025 - Based on implementation with 253 passing tests*

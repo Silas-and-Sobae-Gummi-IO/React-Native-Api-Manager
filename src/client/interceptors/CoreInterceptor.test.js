@@ -4,6 +4,24 @@ import {CoreInterceptor} from './CoreInterceptor';
 import {ApiClient} from '../ApiClient';
 
 describe('CoreInterceptor', () => {
+  let mockFetch;
+
+  beforeEach(() => {
+    mockFetch = jest.fn(() =>
+      Promise.resolve({
+        ok: true,
+        status: 200,
+        headers: new Map([['content-type', 'application/json']]),
+        text: () => Promise.resolve(JSON.stringify({data: 'test'})),
+      })
+    );
+    global.fetch = mockFetch;
+  });
+
+  afterEach(() => {
+    jest.clearAllMocks();
+  });
+
   describe('Built-in Interceptor Registration', () => {
     it('attaches LoggerInterceptor on client init', () => {
       // TODO: Verify CoreInterceptor attaches logger during client:init hook
@@ -11,6 +29,38 @@ describe('CoreInterceptor', () => {
 
     // TODO: Add tests for RetryInterceptor attachment when enabled
     // TODO: Add tests for CancelKeyInterceptor attachment when enabled
+  });
+
+  describe('Default Config', () => {
+    it('sets cancelKey default to null', async () => {
+      const client = new ApiClient();
+      let capturedConfig;
+
+      client.interceptors.add('request:defaultConfig', 'test:capture', (config) => {
+        capturedConfig = config;
+        return config;
+      }, 999);
+
+      const request = client.get('https://api.example.com/test');
+      await request.send();
+
+      expect(capturedConfig).toHaveProperty('cancelKey', null);
+    });
+
+    it('sets autoFixJson default to true', async () => {
+      const client = new ApiClient();
+      let capturedConfig;
+
+      client.interceptors.add('request:defaultConfig', 'test:capture', (config) => {
+        capturedConfig = config;
+        return config;
+      }, 999);
+
+      const request = client.get('https://api.example.com/test');
+      await request.send();
+
+      expect(capturedConfig).toHaveProperty('autoFixJson', true);
+    });
   });
 
   describe('parseResponse Integration', () => {

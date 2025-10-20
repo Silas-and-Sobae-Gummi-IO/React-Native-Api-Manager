@@ -10,14 +10,14 @@ export class ApiRequest {
   }
 
   init() {
-    this._context = {};
+    this._context = {};  // Instance-level context, persists across send() calls
     this._abortController = new AbortController();
     return this;
   }
 
   async send(bodyOverrides = {}) {
-    // Build context from hooks (can be async)
-    this._context = await this._runInterceptors('request:context', {value: {}}, {request: this});
+    // Run early initialization hook before config processing
+    await this._runInterceptors('request:init', undefined, {request: this});
 
     const preparedConfig = await this._prepareConfigs(bodyOverrides);
     const {url, options} = await this._runInterceptors('request:options', preparedConfig);
@@ -53,21 +53,33 @@ export class ApiRequest {
       this._config.headers
     );
 
-    // Body merging - bodyOverrides IS the body data, merge with existing body
-    let finalBody = this._client.config.body;
+    // Body merging - merge plain objects only (FormData conversion happens in buildRequestConfig)
+    let finalBody = undefined;
     
+    // Start with client-level body (should always be plain object)
+    if (this._client.config.body) {
+      finalBody = {...this._client.config.body};
+    }
+    
+    // Merge or replace with request-level body
     if (this._config.body !== undefined) {
-      if (typeof this._config.body === 'object' && !(this._config.body instanceof FormData)) {
-        finalBody = {...finalBody, ...this._config.body};
+      if (this._config.body instanceof FormData) {
+        // FormData replaces everything, can't merge
+        finalBody = this._config.body;
+      } else if (typeof this._config.body === 'object' && this._config.body !== null) {
+        finalBody = {...(finalBody || {}), ...this._config.body};
       } else {
         finalBody = this._config.body;
       }
     }
     
-    // bodyOverrides is the actual body data from send(), merge it
+    // Merge or replace with send-time overrides
     if (Object.keys(bodyOverrides).length > 0) {
-      if (typeof bodyOverrides === 'object' && !(bodyOverrides instanceof FormData)) {
-        finalBody = {...finalBody, ...bodyOverrides};
+      if (bodyOverrides instanceof FormData) {
+        // FormData replaces everything, can't merge
+        finalBody = bodyOverrides;
+      } else if (typeof bodyOverrides === 'object' && bodyOverrides !== null) {
+        finalBody = {...(finalBody || {}), ...bodyOverrides};
       } else {
         finalBody = bodyOverrides;
       }

@@ -7,6 +7,11 @@ import {ApiRequest} from './ApiRequest';
 
 export class ApiClient {
   constructor(config = {}) {
+    // Validate client-level body must be plain object
+    if (config.body && config.body instanceof FormData) {
+      throw new Error('Client-level body cannot be FormData. Use plain objects only.');
+    }
+    
     this.config = config;
     this.interceptors = new InterceptorManager(this);
 

@@ -29,12 +29,12 @@ describe('CancelKeyInterceptor', () => {
       expect(client.interceptors.providers.has('cancelKey')).toBe(true);
     });
 
-    it('registers context and complete hooks', () => {
+    it('registers init and complete hooks', () => {
       const client = new ApiClient();
       const cancelKeyInterceptor = client.interceptors.providers.get('cancelKey');
 
       expect(cancelKeyInterceptor).toBeDefined();
-      expect(client.interceptors.hooks.has('request:context')).toBe(true);
+      expect(client.interceptors.hooks.has('request:init')).toBe(true);
       expect(client.interceptors.hooks.has('request:complete')).toBe(true);
     });
   });

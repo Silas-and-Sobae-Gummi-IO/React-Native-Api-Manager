@@ -93,6 +93,21 @@ describe('ApiClient', () => {
       expect(client.interceptors.providers.has('custom1')).toBe(true);
       expect(client.interceptors.providers.has('custom2')).toBe(true);
     });
+
+    it('throws error when client-level body is FormData', () => {
+      const formData = new FormData();
+      formData.append('key', 'value');
+
+      expect(() => {
+        new ApiClient({body: formData});
+      }).toThrow('Client-level body cannot be FormData');
+    });
+
+    it('allows client-level body as plain object', () => {
+      expect(() => {
+        new ApiClient({body: {is_super_admin: true}});
+      }).not.toThrow();
+    });
   });
 
   describe('HTTP Method Helpers', () => {

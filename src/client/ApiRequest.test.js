@@ -75,9 +75,8 @@ describe('ApiRequest', () => {
       class TrackingInterceptor extends BaseInterceptor {
         static name = 'tracking';
         register() {
-          this._manager.add('request:context', 'track:context', () => {
-            executionOrder.push('context');
-            return {value: {}};
+          this._manager.add('request:init', 'track:init', () => {
+            executionOrder.push('init');
           });
           this._manager.add('request:options', 'track:options', (config) => {
             executionOrder.push('options');
@@ -111,7 +110,7 @@ describe('ApiRequest', () => {
       await request.send();
 
       expect(executionOrder).toEqual([
-        'context',
+        'init',
         'options',
         'beforeRequest',
         'formatResponse',
@@ -121,12 +120,13 @@ describe('ApiRequest', () => {
       ]);
     });
 
-    it('builds context from request:context hook', async () => {
+    it('context persists across multiple send() calls', async () => {
       class ContextInterceptor extends BaseInterceptor {
         static name = 'context';
         register() {
-          this._manager.add('request:context', 'ctx', () => {
-            return {value: {userId: 123, timestamp: Date.now()}};
+          this._manager.add('request:init', 'ctx', (hookContext) => {
+            const {context} = hookContext;
+            context.callCount = (context.callCount || 0) + 1;
           });
         }
       }
@@ -137,10 +137,13 @@ describe('ApiRequest', () => {
       const request = client.get('https://api.example.com/test');
 
       await request.send();
+      expect(request._context.callCount).toBe(1);
 
-      expect(request._context.value).toEqual(
-        expect.objectContaining({userId: 123})
-      );
+      await request.send();
+      expect(request._context.callCount).toBe(2);
+
+      await request.send();
+      expect(request._context.callCount).toBe(3);
     });
 
     it('passes additional context to hooks', async () => {
@@ -205,6 +208,26 @@ describe('ApiRequest', () => {
       expect(body).toEqual({
         clientProp: 'clientValue',
         requestProp: 'requestValue',
+      });
+    });
+
+    it('merges client-level body with all request methods', async () => {
+      const client = new ApiClient({
+        body: {is_super_admin: true},
+      });
+
+      const request = client.post('https://api.example.com/test', {
+        name: 'John',
+        email: 'john@example.com',
+      });
+
+      await request.send();
+
+      const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+      expect(body).toEqual({
+        is_super_admin: true,
+        name: 'John',
+        email: 'john@example.com',
       });
     });
 
@@ -519,8 +542,8 @@ describe('ApiRequest', () => {
       await request.send();
 
       expect(runSpy).toHaveBeenCalledWith(
-        'request:context',
-        expect.any(Object),
+        'request:init',
+        undefined,
         expect.any(Object)
       );
     });
