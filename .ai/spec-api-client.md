@@ -193,6 +193,7 @@ client.interceptors.remove(hookName, name)
 - `request:prepareConfig` — Final adjustments to merged config (runs after merge, before buildRequestConfig)
 - `request:beforeRequest` — Pre-fetch notification (receives {url, options})
 - `request:skipFetch` — Return non-null value to skip fetch and return early (e.g., cache hit)
+- `request:performFetch` — Middleware-style hook to wrap/override how fetch is performed (used by RetryInterceptor)
 - `request:formatResponse` — Transform raw Response object after fetch
 - `request:onResponse` — Observe/log response (non-transforming)
 - `request:formatData` — Parse and transform response data
@@ -260,7 +261,7 @@ class CustomInterceptor extends BaseInterceptor {
 ### Built-in Interceptors
 
 **CoreInterceptor** (always attached)
-- Registers: LoggerInterceptor, StatusHandlerInterceptor, CancelKeyInterceptor, CacheInterceptor, MetricsInterceptor, RateLimitInterceptor
+- Registers: LoggerInterceptor, StatusHandlerInterceptor, CancelKeyInterceptor, CacheInterceptor, MetricsInterceptor, RateLimitInterceptor, RetryInterceptor
 - Sets defaults via `request:defaultConfig`: `autoFixJson: true`, `Accept: application/json` header
 - Wires response parsing via `request:formatData` hook
 
@@ -286,6 +287,19 @@ class CustomInterceptor extends BaseInterceptor {
 - Supports boolean shorthand: `metrics: true` → `metrics: {enable: true, ...defaults}`
 - Uses `_useShorthandConfig()` for config normalization
 - Hooks: `request:beforeRequest`, `request:complete`
+
+**RetryInterceptor** (priority 50)
+- Retries failed requests (response status or network errors) with backoff
+- Supports boolean shorthand: `retry: true` → `retry: {enable: true, ...defaults}`
+- Uses `_useShorthandConfig()` for config normalization
+- Hook: `request:performFetch` (wraps fetch and handles retry loop)
+
+  Config (defaults shown):
+  - `enable: false`
+  - `maxAttempts: 3` — Total attempts including the first
+  - `methods: ['GET','HEAD','PUT','DELETE','OPTIONS']` — Idempotent by default
+  - `retryOn: number[] | (response)=>boolean` — Status codes or predicate
+  - `backoff: { type: 'exponential'|'fixed', base: number, jitter: 'none'|'full' }`
 
 **RateLimitInterceptor** (priority 30)
 - Limits outgoing requests using a token-bucket-like queue
@@ -531,7 +545,7 @@ All core modules are fully tested:
 - **requestBuilder.test.js** (8 tests) — URL building, params, FormData
 - **ApiError.test.js** (2 tests) — Error structure
 
-**Total: 306 tests passing** (includes Agent and Cache tests)
+**Total: 337 tests passing** (includes Agent, Cache, RateLimit, Retry)
 
 ---
 
@@ -539,22 +553,11 @@ All core modules are fully tested:
 
 ### Not Yet Implemented (Good to Have)
 
-**RetryInterceptor**
-- Automatic retry for failed requests
-- Challenge: Current architecture doesn't support restarting request lifecycle from within error hooks
-- Possible solutions:
-  - Implement at ApiClient level as wrapper
-  - Move to ApiAgent layer (where conditional retry already exists)
-  - Rethink interceptor lifecycle to support restarts
 
-**Additional Features:**
-- Request/response transformation pipelines
+**Potential Additions:**
 - Request deduplication (beyond cancelKey)
-- Request caching layer
 - Progress tracking for uploads/downloads
-- Request metrics and timing
 - Circuit breaker pattern
-
 ---
 
 ## Design Principles

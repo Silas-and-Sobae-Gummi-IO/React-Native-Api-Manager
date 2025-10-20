@@ -33,7 +33,11 @@ export class ApiRequest {
         return skipValue;
       }
 
-      let response = await fetch(url, options);
+      // Allow interceptors to wrap/override how fetch is performed
+      let performFetch = async (url, options) => fetch(url, options);
+      performFetch = await this._runInterceptors('request:performFetch', performFetch, {url, options});
+
+      let response = await performFetch(url, options);
 
       // Store response in context for interceptors
       this._context._response = response;

@@ -7,6 +7,7 @@ import {CancelKeyInterceptor} from './CancelKeyInterceptor';
 import {CacheInterceptor} from './CacheInterceptor';
 import {MetricsInterceptor} from './MetricsInterceptor';
 import {RateLimitInterceptor} from './RateLimitInterceptor';
+import {RetryInterceptor} from './RetryInterceptor';
 import {parseResponse} from '../lib/responseParser';
 // import {RetryInterceptor} from './RetryInterceptor';
 
@@ -27,9 +28,8 @@ export class CoreInterceptor extends BaseInterceptor {
     this._manager.attach(CancelKeyInterceptor);
     this._manager.attach(CacheInterceptor);
     this._manager.attach(MetricsInterceptor);
-    // TODO: Re-enable after ConfigManager refactor
-this._manager.attach(RateLimitInterceptor);
-    // this._manager.attach(RetryInterceptor);
+    this._manager.attach(RateLimitInterceptor);
+    this._manager.attach(RetryInterceptor);
 
     // Set default headers for JSON APIs
     this._manager.add('request:defaultConfig', 'core:defaults', this._setDefaults.bind(this), 5);
