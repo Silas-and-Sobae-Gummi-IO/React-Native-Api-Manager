@@ -33,8 +33,8 @@ A modern, framework-agnostic HTTP client with a clean interceptor-based architec
 
 ### Client Layer
 - **src/client/ApiClient.js** — Public API; request factory methods (get/post/put/patch/delete/request)
-- **src/client/ApiRequest.js** — Request handle with init(), send(), abort(); orchestrates hook lifecycle
-  - Context is instance-level: initialized in init(), persists across multiple send() calls
+- **src/client/ApiRequest.js** — Request handle with send(), abort(); orchestrates hook lifecycle
+  - Context is instance-level: initialized in constructor, persists across multiple send() calls
 - **src/client/ApiError.js** — Standard error with config/response/status properties
 
 ### Interceptor System
@@ -260,7 +260,7 @@ class CustomInterceptor extends BaseInterceptor {
 ### Built-in Interceptors
 
 **CoreInterceptor** (always attached)
-- Registers: LoggerInterceptor, StatusHandlerInterceptor, CancelKeyInterceptor
+- Registers: LoggerInterceptor, StatusHandlerInterceptor, CancelKeyInterceptor, CacheInterceptor, MetricsInterceptor, RateLimitInterceptor
 - Sets defaults via `request:defaultConfig`: `autoFixJson: true`, `Accept: application/json` header
 - Wires response parsing via `request:formatData` hook
 
@@ -274,6 +274,40 @@ class CustomInterceptor extends BaseInterceptor {
 - Executes `onStatus` callbacks before response parsing
 - Allows early returns for specific status codes (e.g., 304 Not Modified)
 - Hook: `request:formatResponse`
+
+**CacheInterceptor** (priority 10-999)
+- Caches GET requests with TTL and automatic invalidation
+- Supports boolean shorthand: `cache: true` → `cache: {enable: true, ...defaults}`
+- Uses `_useShorthandConfig()` for config normalization
+- Hooks: `request:beforeRequest` (check cache, invalidate), `request:skipFetch` (return cached), `request:formatData` (store)
+
+**MetricsInterceptor** (priority 100)
+- Tracks request metrics: duration, timestamps, size, status
+- Supports boolean shorthand: `metrics: true` → `metrics: {enable: true, ...defaults}`
+- Uses `_useShorthandConfig()` for config normalization
+- Hooks: `request:beforeRequest`, `request:complete`
+
+**RateLimitInterceptor** (priority 30)
+- Limits outgoing requests using a token-bucket-like queue
+- Supports boolean shorthand: `rateLimit: true` → `rateLimit: {enable: true, ...defaults}`
+- Uses `_useShorthandConfig()` for config normalization
+- Hooks: `request:beforeRequest` (acquire slot and queue if needed)
+
+  Config (defaults shown):
+  - `enable: false` — Turn on/off
+  - `maxRequests: 10` — Allowed requests per window
+  - `window: 1000` — Window size in ms
+  - `strategy: 'sliding' | 'fixed'` —
+    - `sliding`: rolling window; we allow up to `maxRequests` in the last `window` ms (new requests are allowed as the oldest timestamp exits the window)
+    - `fixed`: fixed buckets; count resets at each exact `window` boundary
+  - `scope: 'global' | 'per-endpoint'` —
+    - `global`: single shared bucket for all requests
+    - `per-endpoint`: one bucket per base URL path (query params ignored)
+  - `onRateLimit?: (waitTimeMs:number) => void` — Optional callback when requests are queued; receives computed wait time
+
+  Notes:
+  - Per-request overrides are supported.
+  - Endpoints are derived from URL origin+pathname; invalid URLs fall back to raw string.
 
 **CancelKeyInterceptor** (priority 1 setup, 999 cleanup)
 - Auto-aborts previous request with same `cancelKey` (last-one-wins strategy)
@@ -497,7 +531,7 @@ All core modules are fully tested:
 - **requestBuilder.test.js** (8 tests) — URL building, params, FormData
 - **ApiError.test.js** (2 tests) — Error structure
 
-**Total: 253 tests passing** (includes Agent tests)
+**Total: 306 tests passing** (includes Agent and Cache tests)
 
 ---
 
@@ -520,7 +554,6 @@ All core modules are fully tested:
 - Progress tracking for uploads/downloads
 - Request metrics and timing
 - Circuit breaker pattern
-- Rate limiting
 
 ---
 
@@ -580,4 +613,4 @@ const data = await client.get('/users').send();
 
 ---
 
-*Last Updated: January 2025 - Based on implementation with 253 passing tests*
+*Last Updated: October 2025 - Based on implementation with 306 passing tests*

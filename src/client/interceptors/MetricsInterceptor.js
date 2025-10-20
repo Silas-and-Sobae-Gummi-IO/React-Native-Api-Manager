@@ -19,30 +19,18 @@ import {BaseInterceptor} from './BaseInterceptor';
  */
 export class MetricsInterceptor extends BaseInterceptor {
   static name = 'metrics';
+  static defaultConfig = {
+    enable: false,
+    onMetrics: null,
+  };
+  
+  configKey = 'metrics';
 
   register() {
-    this._manager.add('request:defaultConfig', 'metrics:defaults', this._setDefaults.bind(this), 10);
+    this._useShorthandConfig();
+    
     this._manager.add('request:beforeRequest', 'metrics:start', this._onStart.bind(this), 100);
     this._manager.add('request:complete', 'metrics:end', this._onComplete.bind(this), 100);
-  }
-
-  _setDefaults(config) {
-    // Normalize boolean shorthand: metrics: true/false -> metrics: {enable: true/false}
-    let metricsConfig = config.metrics;
-    if (metricsConfig === true) {
-      metricsConfig = {enable: true};
-    } else if (metricsConfig === false) {
-      metricsConfig = {enable: false};
-    }
-
-    return {
-      ...config,
-      metrics: {
-        enable: false,
-        onMetrics: null,
-        ...(metricsConfig || {}),
-      },
-    };
   }
 
   _shouldTrack(config) {

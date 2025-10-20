@@ -21,6 +21,16 @@ import {BaseInterceptor} from './BaseInterceptor';
  */
 export class RateLimitInterceptor extends BaseInterceptor {
   static name = 'rateLimit';
+  static defaultConfig = {
+    enable: false,
+    maxRequests: 10,
+    window: 1000, // 1 second
+    strategy: 'sliding',
+    scope: 'global',
+    onRateLimit: null,
+  };
+
+  configKey = 'rateLimit';
 
   constructor() {
     super();
@@ -28,29 +38,25 @@ export class RateLimitInterceptor extends BaseInterceptor {
   }
 
   register() {
-    this._manager.add('request:defaultConfig', 'rateLimit:defaults', this._setDefaults.bind(this), 10);
+    // Use standardized shorthand normalization hooks
+    this._useShorthandConfig();
     this._manager.add('request:beforeRequest', 'rateLimit:check', this._checkRateLimit.bind(this), 30);
   }
 
+  // Kept for backward-compatibility in tests; mirrors Base default behavior
   _setDefaults(config) {
-    // Normalize boolean shorthand: rateLimit: true/false -> rateLimit: {enable: true/false}
-    let rateLimitConfig = config.rateLimit;
-    if (rateLimitConfig === true) {
-      rateLimitConfig = {enable: true};
-    } else if (rateLimitConfig === false) {
-      rateLimitConfig = {enable: false};
-    }
+    const val = config.rateLimit;
+    const normalized = val === true
+      ? { enable: true }
+      : val === false
+      ? { enable: false }
+      : (typeof val === 'object' && val !== null ? val : {});
 
     return {
       ...config,
       rateLimit: {
-        enable: false,
-        maxRequests: 10,
-        window: 1000, // 1 second
-        strategy: 'sliding',
-        scope: 'global',
-        onRateLimit: null,
-        ...(rateLimitConfig || {}),
+        ...this.constructor.defaultConfig,
+        ...normalized,
       },
     };
   }
