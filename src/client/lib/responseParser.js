@@ -1,6 +1,6 @@
 // src/client/internals/responseParser.js
 
-import {ApiError} from '../../core/ApiError';
+import {ApiError} from '../ApiError';
 
 /**
  * Attempts to fix a malformed JSON string by finding the first '{' or '['.

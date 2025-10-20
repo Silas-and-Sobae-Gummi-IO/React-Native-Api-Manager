@@ -4,7 +4,7 @@ import { ApiClient } from '../client/ApiClient';
 import { RequestScheduler } from './internals/RequestScheduler';
 import { ConditionalRetrier } from './internals/ConditionalRetrier';
 import { OfflineManager } from './internals/OfflineManager'; // Import
-import { ApiError } from '../core/ApiError';
+import { ApiError } from '../client/ApiError';
 
 class ApiAgent {
   constructor() {

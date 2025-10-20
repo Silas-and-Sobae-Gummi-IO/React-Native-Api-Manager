@@ -1,7 +1,7 @@
 // src/client/internals/responseParser.test.js
 
 import {parseResponse} from './responseParser';
-import {ApiError} from '../../core/ApiError';
+import {ApiError} from '../ApiError';
 
 describe('responseParser', () => {
   const mockConfig = {method: 'GET', url: '/test'};

@@ -1,7 +1,7 @@
 // src/client/ApiClient.test.js
 
 import {ApiClient} from './ApiClient';
-import {ApiError} from '../core/ApiError';
+import {ApiError} from './ApiError';
 import {BaseInterceptor} from './interceptors/BaseInterceptor';
 
 describe('ApiClient', () => {

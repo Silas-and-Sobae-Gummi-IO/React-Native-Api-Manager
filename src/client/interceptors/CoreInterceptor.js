@@ -3,7 +3,7 @@
 import {BaseInterceptor} from './BaseInterceptor';
 import {LoggerInterceptor} from './LoggerInterceptor';
 import {StatusHandlerInterceptor} from './StatusHandlerInterceptor';
-import {parseResponse} from '../internals/responseParser';
+import {parseResponse} from '../lib/responseParser';
 // import {RetryInterceptor} from './RetryInterceptor';
 // import {CancelKeyInterceptor} from './CancelKeyInterceptor';
 

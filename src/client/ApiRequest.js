@@ -1,6 +1,6 @@
 // src/client/ApiRequest.js
 
-import {buildRequestConfig} from './internals/requestBuilder';
+import {buildRequestConfig} from './lib/requestBuilder';
 import {mergeHeaders} from './../utils/headers';
 
 export class ApiRequest {

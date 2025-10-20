@@ -1,6 +1,6 @@
 // src/client/ApiClient.js
 
-import {InterceptorManager} from './internals/InterceptorManager';
+import {InterceptorManager} from './lib/InterceptorManager';
 import {parseShorthandUrl} from '../utils/parser';
 import {CoreInterceptor} from './interceptors/CoreInterceptor';
 import {ApiRequest} from './ApiRequest';
