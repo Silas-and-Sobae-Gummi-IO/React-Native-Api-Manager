@@ -9,14 +9,18 @@ export class ApiRequest {
     this._config = config;
   }
 
-  async init() {
-    this._context = await this._runInterceptors('request:context', {value: {}});
+  init() {
+    this._context = {};
     this._abortController = new AbortController();
     return this;
   }
 
-  async send(overrides = {}) {
-    const {url, options} = await this._runInterceptors('request:options', this._prepareConfigs(overrides));
+  async send(bodyOverrides = {}) {
+    // Build context from hooks (can be async)
+    this._context = await this._runInterceptors('request:context', {value: {}});
+
+    const preparedConfig = await this._prepareConfigs(bodyOverrides);
+    const {url, options} = await this._runInterceptors('request:options', preparedConfig);
     await this._runInterceptors('request:beforeRequest', undefined, {url, options});
 
     try {
@@ -28,10 +32,10 @@ export class ApiRequest {
     } catch (error) {
       error = await this._runInterceptors('request:formatError', error);
       await this._runInterceptors('request:onError', error);
-      const needRethrow = await this._runInterceptors('request:rethrowError', false, {error});
-      if (needRethrow !== false) throw needRethrow;
+      const shouldSuppress = await this._runInterceptors('request:suppressError', false, {error});
+      if (!shouldSuppress) throw error;
     } finally {
-      await this._runInterceptors('request:comlete');
+      await this._runInterceptors('request:complete');
     }
   }
 
@@ -39,18 +43,42 @@ export class ApiRequest {
     if (this._abortController) this._abortController.abort(reason);
   }
 
-  _prepareConfigs(overrides) {
-    const headers = mergeHeaders(this._client.config.headers, this._config.headers, overrides.headers);
+  async _prepareConfigs(bodyOverrides) {
+    // Get defaults from interceptors via request:defaultConfig hook
+    const defaultConfig = await this._runInterceptors('request:defaultConfig', {});
+
+    const headers = mergeHeaders(
+      defaultConfig.headers,
+      this._client.config.headers,
+      this._config.headers
+    );
+
+    // Body merging - bodyOverrides IS the body data, merge with existing body
+    let finalBody = this._client.config.body;
+    
+    if (this._config.body !== undefined) {
+      if (typeof this._config.body === 'object' && !(this._config.body instanceof FormData)) {
+        finalBody = {...finalBody, ...this._config.body};
+      } else {
+        finalBody = this._config.body;
+      }
+    }
+    
+    // bodyOverrides is the actual body data from send(), merge it
+    if (Object.keys(bodyOverrides).length > 0) {
+      if (typeof bodyOverrides === 'object' && !(bodyOverrides instanceof FormData)) {
+        finalBody = {...finalBody, ...bodyOverrides};
+      } else {
+        finalBody = bodyOverrides;
+      }
+    }
 
     return buildRequestConfig({
+      ...defaultConfig,              // Defaults from interceptors
       signal: this._abortController.signal,
-      ...this._client.config,
-      ...this._config,
-      body: {
-        ...this._client.config.body,
-        ...this._config.body,
-        ...overrides,
-      },
+      ...this._client.config,        // Client-level config
+      ...this._config,               // Request-level config
+      body: finalBody,
       headers,
     });
   }

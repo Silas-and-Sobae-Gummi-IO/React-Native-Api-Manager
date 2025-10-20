@@ -34,8 +34,15 @@ function containsFile(data) {
  * @returns {{url: string, options: object}} The final URL and fetch options.
  */
 export function buildRequestConfig(config) {
-  // Join baseURL and url when baseURL is provided; otherwise use url as-is
-  const combinedUrl = config.baseURL ? `${String(config.baseURL).replace(/\/$/, '')}/${String(config.url).replace(/^\//, '')}` : String(config.url);
+  const url = String(config.url);
+  
+  // Check if URL is absolute (has protocol)
+  const isAbsoluteUrl = /^https?:\/\//i.test(url);
+  
+  // Join baseURL and url when baseURL is provided and URL is relative
+  const combinedUrl = config.baseURL && !isAbsoluteUrl
+    ? `${String(config.baseURL).replace(/\/$/, '')}/${url.replace(/^\//, '')}`
+    : url;
 
   const queryString = serializeParams(config.params);
   const urlWithParams = `${combinedUrl}${queryString}`;

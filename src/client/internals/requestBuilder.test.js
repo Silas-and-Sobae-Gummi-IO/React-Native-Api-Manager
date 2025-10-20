@@ -38,12 +38,12 @@ describe('buildRequestConfig - Composes the final config for a fetch request', (
 
   it('should JSON.stringify an object body and set the Content-Type header', () => {
     const body = { name: 'John Doe' };
-    const config = { method: 'POST', url: '/users', body, baseURL }; // Added baseURL
+    const config = { method: 'POST', url: '/users', body, baseURL };
 
-    const { body: finalBody, headers } = buildRequestConfig(config);
+    const { options } = buildRequestConfig(config);
 
-    expect(finalBody).toBe('{"name":"John Doe"}');
-    expect(headers['content-type']).toBe('application/json');
+    expect(options.body).toBe('{"name":"John Doe"}');
+    expect(options.headers['content-type']).toBe('application/json');
   });
 
   it('should handle a request with both a JSON body and query parameters', () => {
@@ -58,13 +58,13 @@ describe('buildRequestConfig - Composes the final config for a fetch request', (
       params: paramsPayload,
     };
 
-    const { url: finalUrl, body: finalBody } = buildRequestConfig(config);
+    const { url: finalUrl, options } = buildRequestConfig(config);
 
     // Assert the URL correctly includes the serialized query string
     expect(finalUrl).toBe('https://api.example.com/posts?serialized=true');
 
     // Assert the body is the correctly stringified JSON payload
-    expect(finalBody).toBe(JSON.stringify(bodyPayload));
+    expect(options.body).toBe(JSON.stringify(bodyPayload));
 
     // We can also verify that our mocked serializeParams function was called correctly
     const { serializeParams } = require('../../utils/url');
@@ -75,11 +75,11 @@ describe('buildRequestConfig - Composes the final config for a fetch request', (
     const formData = new FormData();
     formData.append('key', 'value');
 
-    const config = { method: 'POST', url: '/upload', body: formData, baseURL }; // Added baseURL
+    const config = { method: 'POST', url: '/upload', body: formData, baseURL };
 
-    const { body: finalBody, headers } = buildRequestConfig(config);
-    expect(finalBody).toBe(formData);
-    expect(headers['content-type']).toBeUndefined();
+    const { options } = buildRequestConfig(config);
+    expect(options.body).toBe(formData);
+    expect(options.headers['content-type']).toBeUndefined();
   });
 
   it('should automatically convert a plain object to FormData if it contains a file-like object', () => {
@@ -98,10 +98,10 @@ describe('buildRequestConfig - Composes the final config for a fetch request', (
       url: '/upload',
       body: bodyPayload,
       baseURL,
-    }; // Added baseURL
-    const { body: finalBody, headers } = buildRequestConfig(config);
-    expect(finalBody).toBeInstanceOf(FormData);
-    expect(headers['content-type']).toBeUndefined();
+    };
+    const { options } = buildRequestConfig(config);
+    expect(options.body).toBeInstanceOf(FormData);
+    expect(options.headers['content-type']).toBeUndefined();
   });
 
   it('should correctly handle an array of files for multi-uploads', () => {
@@ -150,9 +150,9 @@ describe('buildRequestConfig - Composes the final config for a fetch request', (
       url: '/upload-nested',
       body: bodyPayload,
       baseURL,
-    }; // Added baseURL
-    const { body: finalBody } = buildRequestConfig(config);
-    expect(finalBody).toBeInstanceOf(FormData);
+    };
+    const { options } = buildRequestConfig(config);
+    expect(options.body).toBeInstanceOf(FormData);
   });
 
   it('should convert to FormData for deeply nested file-like objects', () => {
@@ -166,7 +166,7 @@ describe('buildRequestConfig - Composes the final config for a fetch request', (
         ],
       },
     };
-    const { body: finalBody } = buildRequestConfig({ method: 'POST', url: '/deep', baseURL, body });
-    expect(finalBody).toBeInstanceOf(FormData);
+    const { options } = buildRequestConfig({ method: 'POST', url: '/deep', baseURL, body });
+    expect(options.body).toBeInstanceOf(FormData);
   });
 });

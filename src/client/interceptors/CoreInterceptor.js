@@ -2,23 +2,44 @@
 
 import {BaseInterceptor} from './BaseInterceptor';
 import {LoggerInterceptor} from './LoggerInterceptor';
+import {StatusHandlerInterceptor} from './StatusHandlerInterceptor';
+import {parseResponse} from '../internals/responseParser';
 // import {RetryInterceptor} from './RetryInterceptor';
 // import {CancelKeyInterceptor} from './CancelKeyInterceptor';
 
 /**
  * CoreInterceptor
- * Registers built-in interceptors on client initialization.
+ * Registers built-in interceptors and response parsing.
  */
 export class CoreInterceptor extends BaseInterceptor {
   static name = 'core';
 
   register() {
-    this._manager.add('client:init', 'core:attachBuiltIns', this._attachBuiltInInterceptors.bind(this), 10);
+    // Attach built-in interceptors immediately during Core registration
+    this._manager.attach(LoggerInterceptor);
+    this._manager.attach(StatusHandlerInterceptor);
+    // this._manager.attach(RetryInterceptor);
+    // this._manager.attach(CancelKeyInterceptor);
+
+    // Set default config for JSON APIs
+    this._manager.add('request:defaultConfig', 'core:defaults', this._setDefaults.bind(this), 10);
+
+    // Wire up response parsing
+    this._manager.add('request:formatData', 'core:parseResponse', this._parseResponse.bind(this), 10);
   }
 
-  _attachBuiltInInterceptors() {
-    this._manager.attach(LoggerInterceptor);
-    // this._manager.attach('retry', RetryInterceptor);
-    // this._manager.attach('cancelKey', CancelKeyInterceptor);
+  _setDefaults(config) {
+    return {
+      ...config,
+      autoFixJson: config.autoFixJson ?? true,
+      headers: {
+        accept: 'application/json',
+        ...config.headers,
+      },
+    };
+  }
+
+  async _parseResponse(response, context) {
+    return await parseResponse(response, context.config);
   }
 }

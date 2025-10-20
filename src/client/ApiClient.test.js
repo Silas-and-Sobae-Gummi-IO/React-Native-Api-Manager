@@ -13,7 +13,9 @@ describe('ApiClient', () => {
       Promise.resolve({
         ok: true,
         status: 200,
+        headers: new Map([['content-type', 'application/json']]),
         json: () => Promise.resolve({data: 'mock response'}),
+        text: () => Promise.resolve(JSON.stringify({data: 'mock response'})),
       })
     );
     global.fetch = mockFetch;
@@ -364,6 +366,8 @@ describe('ApiClient', () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
         status: 200,
+        headers: new Map([['content-type', 'application/json']]),
+        text: () => Promise.resolve(JSON.stringify({id: 1, name: 'John'})),
         json: () => Promise.resolve({id: 1, name: 'John'}),
       });
 
@@ -378,7 +382,8 @@ describe('ApiClient', () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
         status: 204,
-        json: () => Promise.resolve(null),
+        headers: new Map(),
+        text: () => Promise.resolve(''),
       });
 
       const client = new ApiClient();
@@ -392,6 +397,8 @@ describe('ApiClient', () => {
       mockFetch.mockResolvedValueOnce({
         ok: false,
         status: 404,
+        headers: new Map([['content-type', 'application/json']]),
+        text: () => Promise.resolve(JSON.stringify({error: 'Not Found'})),
         json: () => Promise.resolve({error: 'Not Found'}),
       });
 
@@ -405,6 +412,8 @@ describe('ApiClient', () => {
       mockFetch.mockResolvedValueOnce({
         ok: false,
         status: 422,
+        headers: new Map([['content-type', 'application/json']]),
+        text: () => Promise.resolve(JSON.stringify({errors: {email: 'is invalid'}})),
         json: () => Promise.resolve({errors: {email: 'is invalid'}}),
       });
 
@@ -437,6 +446,8 @@ describe('ApiClient', () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
         status: 200,
+        headers: new Map([['content-type', 'application/json']]),
+        text: () => Promise.resolve(JSON.stringify({userId: 42, status: 'active'})),
         json: () => Promise.resolve({userId: 42, status: 'active'}),
       });
 
@@ -451,9 +462,15 @@ describe('ApiClient', () => {
   describe('Request Abortion', () => {
     it('allows manual request cancellation via abort()', async () => {
       mockFetch.mockImplementationOnce(
-        () =>
-          new Promise((resolve) => {
-            setTimeout(() => resolve({ok: true, status: 200}), 100);
+        (url, options) =>
+          new Promise((resolve, reject) => {
+            const timeout = setTimeout(() => resolve({ok: true, status: 200, text: () => Promise.resolve('')}), 100);
+            if (options.signal) {
+              options.signal.addEventListener('abort', () => {
+                clearTimeout(timeout);
+                reject(new DOMException('Aborted', 'AbortError'));
+              });
+            }
           })
       );
 
@@ -461,6 +478,8 @@ describe('ApiClient', () => {
       const request = client.get('https://api.example.com/slow');
 
       const promise = request.send();
+      // Wait a tick to ensure fetch has been called and signal listener is attached
+      await new Promise(resolve => setImmediate(resolve));
       request.abort();
 
       await expect(promise).rejects.toThrow();

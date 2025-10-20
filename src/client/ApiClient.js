@@ -23,19 +23,24 @@ export class ApiClient {
   request = (url, options = {}) => this._request({...options, ...parseShorthandUrl(url)});
 
   _registerInterceptorsAndHooks() {
+    // Attach Core first (this registers built-in interceptors like logger)
     this.interceptors.attach(CoreInterceptor);
 
-    (config?.interceptors || []).forEach((i) => this.interceptors.attach(i));
+    // Process user's interceptors (can remove built-ins with '-name')
+    if (this.config?.interceptors) {
+      this.interceptors.processInterceptors(this.config.interceptors);
+    }
 
-    Object.entries(config?.hooks || {}).forEach(([key, value]) => {
+    // Register individual hooks from config
+    Object.entries(this.config?.hooks || {}).forEach(([key, value]) => {
       // onSuccess[key]@2o, -onSuccess[key], ~onSuccess[key]
       const [name, callback, priority = 10] = value;
       this.interceptors.add(key, name, callback, priority);
     });
   }
 
-  async _request(config) {
+  _request(config) {
     const request = new ApiRequest(this, config);
-    return await request.init();
+    return request.init();
   }
 }

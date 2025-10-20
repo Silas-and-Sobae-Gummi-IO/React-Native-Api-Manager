@@ -5,18 +5,18 @@ export class LoggerInterceptor extends BaseInterceptor {
   static name = 'logger';
 
   register() {
-    this._manager.add('request:options', 'logger:opts', this._onSetup.bind(this), 900);
+    this._manager.add('request:defaultConfig', 'logger:opts', this._onSetup.bind(this), 900);
     this._manager.add('request:beforeRequest', 'logger:req', this._onBeforeRequest.bind(this), 999);
     this._manager.add('request:onResponse', 'logger:res', this._onResponse.bind(this), 999);
   }
 
   _shouldLog(scope = null) {
-    if (!this._client?.config?.debug.enable) {
+    if (!this._client?.config?.debug?.enable) {
       return false;
     }
 
-    const clientScope = this._client?.config?.debug.scope;
-    return scope === null ? true : clientScope === '*' || clientScope.includes(scope);
+    const clientScope = this._client?.config?.debug?.scope;
+    return scope === null ? true : clientScope === '*' || clientScope?.includes(scope);
   }
 
   _onSetup(config) {
