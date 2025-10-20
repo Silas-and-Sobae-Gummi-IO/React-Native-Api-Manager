@@ -2,38 +2,70 @@
 
 import {BaseInterceptor} from './BaseInterceptor';
 
+/**
+ * CancelKeyInterceptor
+ * 
+ * Automatically cancels previous pending requests with the same cancelKey.
+ * 
+ * Use case: Search autocomplete, rapid API calls where only the latest matters.
+ * 
+ * Usage:
+ *   client.get('/search', { cancelKey: 'search', params: { q: 'abc' } })
+ *   client.get('/search', { cancelKey: 'search', params: { q: 'abcd' } }) // Cancels previous
+ */
 export class CancelKeyInterceptor extends BaseInterceptor {
+  static name = 'cancelKey';
+
   constructor() {
     super();
-    this.map = new Map();
+    this._cancelMap = new Map(); // cancelKey -> AbortController
   }
 
-  register(hooks, client) {
-    hooks.addAction('request_setup', 'cancelkey:setup', this._onSetup, 5);
-    hooks.addAction('done', 'cancelkey:cleanup', this._onCleanup, 50);
+  register() {
+    // Hook early to capture and cancel previous requests
+    this._manager.add('request:context', 'cancelKey:setup', this._onSetup.bind(this), 1);
+    
+    // Hook late to clean up completed requests
+    this._manager.add('request:complete', 'cancelKey:cleanup', this._onCleanup.bind(this), 999);
   }
 
-  _onSetup = ({config}, ctx) => {
-    const key = config?.cancelKey;
-    if (!key) return;
+  _onSetup(contextValue, hookContext) {
+    const {config, request} = hookContext;
+    const cancelKey = config?.cancelKey;
 
-    const prev = this.map.get(key);
-    if (prev && prev !== ctx.abortController) {
+    if (!cancelKey) {
+      return contextValue;
+    }
+
+    // Check if there's a previous request with this key
+    const prevController = this._cancelMap.get(cancelKey);
+    if (prevController && prevController !== request._abortController) {
       try {
-        prev.abort('cancelKey');
-      } catch (_) {}
+        prevController.abort('cancelKey');
+      } catch (e) {
+        // Ignore abort errors
+      }
     }
 
-    this.map.set(key, ctx.abortController);
-  };
+    // Store the current request's abort controller
+    this._cancelMap.set(cancelKey, request._abortController);
 
-  _onCleanup = (_payload, ctx) => {
-    const key = ctx.config?.cancelKey;
-    if (!key) return;
+    return contextValue;
+  }
 
-    const current = this.map.get(key);
-    if (current === ctx.abortController) {
-      this.map.delete(key);
+  _onCleanup(hookContext) {
+    // request:complete is called with undefined value, so hookContext is the first param
+    const {config, request} = hookContext;
+    const cancelKey = config?.cancelKey;
+
+    if (!cancelKey) {
+      return;
     }
-  };
+
+    // Only clean up if this is the current request for this key
+    const current = this._cancelMap.get(cancelKey);
+    if (current === request._abortController) {
+      this._cancelMap.delete(cancelKey);
+    }
+  }
 }

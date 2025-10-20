@@ -17,7 +17,7 @@ export class ApiRequest {
 
   async send(bodyOverrides = {}) {
     // Build context from hooks (can be async)
-    this._context = await this._runInterceptors('request:context', {value: {}});
+    this._context = await this._runInterceptors('request:context', {value: {}}, {request: this});
 
     const preparedConfig = await this._prepareConfigs(bodyOverrides);
     const {url, options} = await this._runInterceptors('request:options', preparedConfig);
@@ -35,7 +35,7 @@ export class ApiRequest {
       const shouldSuppress = await this._runInterceptors('request:suppressError', false, {error});
       if (!shouldSuppress) throw error;
     } finally {
-      await this._runInterceptors('request:complete');
+      await this._runInterceptors('request:complete', undefined, {request: this});
     }
   }
 

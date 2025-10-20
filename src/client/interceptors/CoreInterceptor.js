@@ -3,9 +3,9 @@
 import {BaseInterceptor} from './BaseInterceptor';
 import {LoggerInterceptor} from './LoggerInterceptor';
 import {StatusHandlerInterceptor} from './StatusHandlerInterceptor';
+import {CancelKeyInterceptor} from './CancelKeyInterceptor';
 import {parseResponse} from '../lib/responseParser';
 // import {RetryInterceptor} from './RetryInterceptor';
-// import {CancelKeyInterceptor} from './CancelKeyInterceptor';
 
 /**
  * CoreInterceptor
@@ -18,8 +18,8 @@ export class CoreInterceptor extends BaseInterceptor {
     // Attach built-in interceptors immediately during Core registration
     this._manager.attach(LoggerInterceptor);
     this._manager.attach(StatusHandlerInterceptor);
+    this._manager.attach(CancelKeyInterceptor);
     // this._manager.attach(RetryInterceptor);
-    // this._manager.attach(CancelKeyInterceptor);
 
     // Set default config for JSON APIs
     this._manager.add('request:defaultConfig', 'core:defaults', this._setDefaults.bind(this), 10);
