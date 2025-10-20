@@ -3,9 +3,16 @@ import {BaseInterceptor} from './BaseInterceptor';
 
 export class LoggerInterceptor extends BaseInterceptor {
   static name = 'logger';
+  static defaultConfig = {
+    enable: false,
+    scope: '*',
+  };
+  
+  configKey = 'debug';
 
   register() {
-    this._manager.add('request:defaultConfig', 'logger:opts', this._onSetup.bind(this), 900);
+    this._useShorthandConfig();
+    
     this._manager.add('request:beforeRequest', 'logger:req', this._onBeforeRequest.bind(this), 999);
     this._manager.add('request:onResponse', 'logger:res', this._onResponse.bind(this), 999);
   }
@@ -17,16 +24,6 @@ export class LoggerInterceptor extends BaseInterceptor {
 
     const clientScope = this._client?.config?.debug?.scope;
     return scope === null ? true : clientScope === '*' || clientScope?.includes(scope);
-  }
-
-  _onSetup(config) {
-    return {
-      ...config,
-      debug: {
-        enable: true,
-        scope: '*',
-      },
-    };
   }
 
   _onBeforeRequest({options, url}) {

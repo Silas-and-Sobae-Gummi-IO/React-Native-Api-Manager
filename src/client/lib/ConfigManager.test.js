@@ -40,17 +40,17 @@ describe('ConfigManager', () => {
       expect(result.timeout).toBe(10000);
     });
 
-    it('runs defaultConfig hook', async () => {
+    it('runs defaultConfig hook with empty object first', async () => {
       const clientConfig = {};
       const requestConfig = {};
       const abortSignal = new AbortController().signal;
 
       await configManager.prepare(clientConfig, requestConfig, {}, abortSignal);
 
-      expect(mockInterceptors.run).toHaveBeenCalledWith('request:defaultConfig', expect.any(Object));
+      expect(mockInterceptors.run).toHaveBeenCalledWith('request:defaultConfig', {});
     });
 
-    it('passes merged config to defaultConfig hook', async () => {
+    it('runs prepareConfig hook with merged config', async () => {
       const clientConfig = {baseURL: 'https://api.example.com'};
       const requestConfig = {url: '/users'};
       const abortSignal = new AbortController().signal;
@@ -58,7 +58,7 @@ describe('ConfigManager', () => {
       await configManager.prepare(clientConfig, requestConfig, {}, abortSignal);
 
       expect(mockInterceptors.run).toHaveBeenCalledWith(
-        'request:defaultConfig',
+        'request:prepareConfig',
         expect.objectContaining({
           baseURL: 'https://api.example.com',
           url: '/users',
@@ -205,6 +205,78 @@ describe('ConfigManager', () => {
       const result = await configManager.prepare(clientConfig, requestConfig, {}, abortSignal);
 
       expect(result.body).toBe('raw string');
+    });
+  });
+
+  describe('Hook System', () => {
+    it('calls hooks in correct order', async () => {
+      const callOrder = [];
+      mockInterceptors.run = jest.fn((hookName, config) => {
+        callOrder.push(hookName);
+        return Promise.resolve(config);
+      });
+
+      const clientConfig = {};
+      const requestConfig = {};
+      const abortSignal = new AbortController().signal;
+
+      await configManager.prepare(clientConfig, requestConfig, {}, abortSignal);
+
+      expect(callOrder).toEqual([
+        'request:defaultConfig',
+        'request:clientConfig',
+        'request:requestConfig',
+        'request:prepareConfig',
+      ]);
+    });
+
+    it('merges defaultConfig output with user configs', async () => {
+      // Mock defaultConfig to return some defaults
+      mockInterceptors.run = jest.fn((hookName, config) => {
+        if (hookName === 'request:defaultConfig') {
+          return Promise.resolve({
+            autoFixJson: true,
+            timeout: 5000,
+            headers: {accept: 'application/json'},
+          });
+        }
+        return Promise.resolve(config);
+      });
+
+      const clientConfig = {timeout: 10000, baseURL: 'https://api.example.com'};
+      const requestConfig = {url: '/users'};
+      const abortSignal = new AbortController().signal;
+
+      const result = await configManager.prepare(clientConfig, requestConfig, {}, abortSignal);
+
+      // User config should override defaults
+      expect(result.timeout).toBe(10000);
+      // Defaults should be present if not overridden
+      expect(result.autoFixJson).toBe(true);
+      // User configs should be preserved
+      expect(result.baseURL).toBe('https://api.example.com');
+      expect(result.url).toBe('/users');
+    });
+
+    it('allows prepareConfig to modify merged config', async () => {
+      mockInterceptors.run = jest.fn((hookName, config) => {
+        if (hookName === 'request:prepareConfig') {
+          return Promise.resolve({
+            ...config,
+            modified: true,
+          });
+        }
+        return Promise.resolve(config);
+      });
+
+      const clientConfig = {baseURL: 'https://api.example.com'};
+      const requestConfig = {};
+      const abortSignal = new AbortController().signal;
+
+      const result = await configManager.prepare(clientConfig, requestConfig, {}, abortSignal);
+
+      expect(result.modified).toBe(true);
+      expect(result.baseURL).toBe('https://api.example.com');
     });
   });
 

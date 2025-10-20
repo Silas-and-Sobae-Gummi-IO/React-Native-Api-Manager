@@ -46,7 +46,8 @@ A modern, framework-agnostic HTTP client with a clean interceptor-based architec
 - **src/client/interceptors/CancelKeyInterceptor.js** — Auto-cancels duplicate requests
 
 ### Internal Utilities
-- **src/client/lib/requestBuilder.js** — Builds fetch URL/options; handles FormData/JSON; merges config
+- **src/client/lib/ConfigManager.js** — Manages config lifecycle: defaultConfig → clientConfig → requestConfig → deep merge → prepareConfig
+- **src/client/lib/requestBuilder.js** — Builds fetch URL/options from final config; handles FormData/JSON
 - **src/client/lib/responseParser.js** — Parses responses; autoFixJson; throws ApiError on failures
 - **src/utils/** — serializeParams, mergeHeaders, parser helpers
 
@@ -114,17 +115,32 @@ client.interceptors.remove(hookName, name)
                  │
                  ▼
         ┌────────────────────────┐
-        │  request:defaultConfig │  Apply interceptor defaults
+        │  request:defaultConfig │  Interceptors add their defaults (empty object input)
         └────────┬───────────────┘
                  │
                  ▼
         ┌────────────────────────┐
-        │  _prepareConfigs()     │  Merge client/request/override configs
+        │  request:clientConfig  │  Normalize client config (boolean shorthand, etc.)
         └────────┬───────────────┘
                  │
                  ▼
         ┌────────────────────────┐
-        │  request:options       │  Final config transformation
+        │ request:requestConfig  │  Normalize request config
+        └────────┬───────────────┘
+                 │
+                 ▼
+        ┌────────────────────────┐
+        │  ConfigManager.prepare │  Deep merge configs (defaults < client < request)
+        └────────┬───────────────┘
+                 │
+                 ▼
+        ┌────────────────────────┐
+        │  request:prepareConfig │  Final adjustments to merged config
+        └────────┬───────────────┘
+                 │
+                 ▼
+        ┌────────────────────────┐
+        │  buildRequestConfig()  │  Build fetch URL and options
         └────────┬───────────────┘
                  │
                  ▼
@@ -171,9 +187,12 @@ client.interceptors.remove(hookName, name)
 **Lifecycle Hooks:**
 - `client:init` — Fired in ApiClient constructor; Core attaches built-ins here
 - `request:init` — Early initialization hook before config processing (for setup tasks like cancelKey)
-- `request:defaultConfig` — Apply default configuration values
-- `request:options` — Transform final {url, options} before fetch
+- `request:defaultConfig` — Interceptors add default config values (receives empty object, runs before normalization)
+- `request:clientConfig` — Normalize client config (e.g., boolean shorthand: `cache: true` → `cache: {enable: true}`)
+- `request:requestConfig` — Normalize request config (same as clientConfig but for per-request config)
+- `request:prepareConfig` — Final adjustments to merged config (runs after merge, before buildRequestConfig)
 - `request:beforeRequest` — Pre-fetch notification (receives {url, options})
+- `request:skipFetch` — Return non-null value to skip fetch and return early (e.g., cache hit)
 - `request:formatResponse` — Transform raw Response object after fetch
 - `request:onResponse` — Observe/log response (non-transforming)
 - `request:formatData` — Parse and transform response data
@@ -212,9 +231,18 @@ All interceptors extend this base class:
 ```js path=null start=null
 class CustomInterceptor extends BaseInterceptor {
   static name = 'custom';  // Required: unique identifier
+  static defaultConfig = {   // Optional: default config for this interceptor
+    enable: false,
+    customOption: 'value',
+  };
+  
+  configKey = 'custom';  // Config key in client/request config (required)
   
   register() {
-    // Add hooks during registration
+    // Use helper for boolean shorthand pattern (must pass configKey explicitly)
+    this._useShorthandConfig('custom');
+    
+    // Add other hooks
     this._manager.add('request:beforeRequest', 'custom:log', this._log.bind(this), 10);
   }
   
@@ -224,17 +252,23 @@ class CustomInterceptor extends BaseInterceptor {
 }
 ```
 
+**BaseInterceptor Helpers:**
+- `_useShorthandConfig(key)` — Auto-registers hooks for boolean shorthand (e.g., `cache: true` → `cache: {enable: true, ...defaults}`)
+- `_getDefaultConfig()` — Returns default config (from `static defaultConfig` or override this method)
+- `_normalizeConfig(config, key)` — Normalizes config value (handles boolean shorthand and merges with defaults)
+
 ### Built-in Interceptors
 
 **CoreInterceptor** (always attached)
 - Registers: LoggerInterceptor, StatusHandlerInterceptor, CancelKeyInterceptor
-- Sets defaults: `autoFixJson: true`, `cancelKey: null`, `Accept: application/json` header
-- Wires response parsing via `formatData` hook
+- Sets defaults via `request:defaultConfig`: `autoFixJson: true`, `Accept: application/json` header
+- Wires response parsing via `request:formatData` hook
 
 **LoggerInterceptor** (priority 900+)
 - Logs request/response when `debug.enable === true`
 - Respects `debug.scope` for filtered logging
-- Hooks: `request:defaultConfig`, `request:beforeRequest`, `request:onResponse`
+- Uses `_useShorthandConfig('debug')` for boolean shorthand support
+- Hooks: `request:beforeRequest`, `request:onResponse`
 
 **StatusHandlerInterceptor** (priority 50)
 - Executes `onStatus` callbacks before response parsing

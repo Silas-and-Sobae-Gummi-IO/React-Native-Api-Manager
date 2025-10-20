@@ -8,12 +8,8 @@ export class ApiRequest {
     this._client = client;
     this._config = config;
     this._configManager = new ConfigManager(client.interceptors);
-  }
-
-  init() {
-    this._context = {};  // Instance-level context, persists across send() calls
+    this._context = {}; // Instance-level context, persists across send() calls
     this._abortController = new AbortController();
-    return this;
   }
 
   async send(bodyOverrides = {}) {
@@ -21,16 +17,11 @@ export class ApiRequest {
     await this._runInterceptors('request:init', undefined, {request: this});
 
     // Merge configs using ConfigManager
-    const mergedConfig = await this._configManager.prepare(
-      this._client.config,
-      this._config,
-      bodyOverrides,
-      this._abortController.signal
-    );
-    
+    const mergedConfig = await this._configManager.prepare(this._client.config, this._config, bodyOverrides, this._abortController.signal);
+
     // Store full merged config in context (includes custom fields like cache, metrics, etc.)
     this._context.config = mergedConfig;
-    
+
     // Build fetch params from merged config
     const {url, options} = buildRequestConfig(mergedConfig);
     await this._runInterceptors('request:beforeRequest', undefined, {url, options});
@@ -43,10 +34,10 @@ export class ApiRequest {
       }
 
       let response = await fetch(url, options);
-      
+
       // Store response in context for interceptors
       this._context._response = response;
-      
+
       response = await this._runInterceptors('request:formatResponse', response);
       await this._runInterceptors('request:onResponse', response);
 

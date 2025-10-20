@@ -46,9 +46,9 @@ describe('CacheInterceptor', () => {
       const client = new ApiClient();
       const cache = client.interceptors.providers.get('cache');
 
-      const config = cache._setDefaults({});
+      const defaultConfig = cache._getDefaultConfig();
 
-      expect(config.cache).toMatchObject({
+      expect(defaultConfig).toMatchObject({
         enable: false,
         ttl: 60000,
         maxSize: 100,
@@ -57,18 +57,16 @@ describe('CacheInterceptor', () => {
     });
 
     it('preserves user-provided cache config', () => {
-      const client = new ApiClient();
-      const cache = client.interceptors.providers.get('cache');
+      const cache = new CacheInterceptor();
+      cache._manager = {}; // Mock manager
 
-      const userConfig = {
+      const config = cache._normalizeConfig({
         cache: {
           enable: true,
           ttl: 30000,
           maxSize: 50,
         },
-      };
-
-      const config = cache._setDefaults(userConfig);
+      }, 'cache');
 
       expect(config.cache.enable).toBe(true);
       expect(config.cache.ttl).toBe(30000);
@@ -302,9 +300,11 @@ describe('CacheInterceptor', () => {
       expect(mockFetch).toHaveBeenCalledTimes(3);
 
       // Users should be evicted, posts and comments should be cached
-      await client.get('https://api.example.com/users').send(); // New fetch
-      await client.get('https://api.example.com/posts').send(); // Cached
+      // But fetching users again will evict posts (LRU with maxSize=2)
+      await client.get('https://api.example.com/users').send(); // New fetch (was evicted)
+      // After storing users, cache is [comments, users], posts was evicted
       await client.get('https://api.example.com/comments').send(); // Cached
+      await client.get('https://api.example.com/users').send(); // Cached
 
       expect(mockFetch).toHaveBeenCalledTimes(4); // Only users fetched again
     });
@@ -326,9 +326,10 @@ describe('CacheInterceptor', () => {
       expect(mockFetch).toHaveBeenCalledTimes(3);
 
       // Users and comments should be cached, posts should be evicted
-      await client.get('https://api.example.com/users').send(); // Cached
-      await client.get('https://api.example.com/posts').send(); // New fetch
-      await client.get('https://api.example.com/comments').send(); // Cached
+      await client.get('https://api.example.com/users').send(); // Cached (moved to end)
+      await client.get('https://api.example.com/comments').send(); // Cached (moved to end)
+      // After these, cache order is [users, comments], posts is still evicted
+      await client.get('https://api.example.com/posts').send(); // New fetch (was evicted)
 
       expect(mockFetch).toHaveBeenCalledTimes(4);
     });
@@ -336,7 +337,7 @@ describe('CacheInterceptor', () => {
 
   describe('Custom cache key generator', () => {
     it('uses custom key generator when provided', async () => {
-      const keyGen = jest.fn(config => `custom-${config.url}`);
+      const keyGen = jest.fn((config) => `custom-${config.url}`);
 
       const client = new ApiClient({
         cache: {
@@ -367,7 +368,7 @@ describe('CacheInterceptor', () => {
 
   describe('shouldCache callback', () => {
     it('uses shouldCache callback to determine if response should be cached', async () => {
-      const shouldCache = jest.fn(response => response.status === 200);
+      const shouldCache = jest.fn((response) => response.status === 200);
 
       const client = new ApiClient({
         cache: {
@@ -385,13 +386,13 @@ describe('CacheInterceptor', () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
         status: 200,
-        headers: new Map(),
+        headers: new Map([['content-type', 'application/json']]),
         text: () => Promise.resolve('{"data": "first"}'),
       });
       mockFetch.mockResolvedValueOnce({
         ok: true,
         status: 200,
-        headers: new Map(),
+        headers: new Map([['content-type', 'application/json']]),
         text: () => Promise.resolve('{"data": "second"}'),
       });
 
@@ -445,7 +446,7 @@ describe('CacheInterceptor', () => {
     it('supports custom storage adapter', async () => {
       const customStorage = {
         _data: {},
-        get: jest.fn(key => customStorage._data[key] || null),
+        get: jest.fn((key) => customStorage._data[key] || null),
         set: jest.fn((key, value) => {
           customStorage._data[key] = value;
         }),
@@ -499,7 +500,6 @@ describe('CacheInterceptor', () => {
       const baseUrl = cache._extractBaseUrl('not-a-valid-url');
       expect(baseUrl).toBe('not-a-valid-url');
     });
-
   });
 
   describe('MemoryStorage', () => {
@@ -519,7 +519,7 @@ describe('CacheInterceptor', () => {
         cache: {enable: true},
       });
       const cache = client.interceptors.providers.get('cache');
-      const storage = cache._getStorage({cache: {enable: true}});
+      const storage = cache._getStorage({cache: {enable: true, storage: 'memory', maxSize: 100}});
 
       await client.get('https://api.example.com/users').send();
       expect(storage.size).toBeGreaterThan(0);

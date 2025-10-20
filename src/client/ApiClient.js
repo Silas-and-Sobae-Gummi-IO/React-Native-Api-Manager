@@ -45,7 +45,6 @@ export class ApiClient {
   }
 
   _request(config) {
-    const request = new ApiRequest(this, config);
-    return request.init();
+    return new ApiRequest(this, config);
   }
 }

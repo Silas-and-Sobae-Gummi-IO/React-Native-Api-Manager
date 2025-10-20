@@ -33,28 +33,12 @@ describe('ApiRequest', () => {
       expect(request._config).toBe(config);
     });
 
-    it('init() creates context and abort controller', () => {
+    it('constructor creates context and abort controller', () => {
       const client = new ApiClient();
       const request = new ApiRequest(client, {});
-      
-      const result = request.init();
 
-      expect(result).toBe(request); // Returns self for chaining
       expect(request._context).toEqual({});
       expect(request._abortController).toBeInstanceOf(AbortController);
-    });
-
-    it('each init() creates a new abort controller', () => {
-      const client = new ApiClient();
-      const request = new ApiRequest(client, {});
-      
-      request.init();
-      const firstController = request._abortController;
-      
-      request.init();
-      const secondController = request._abortController;
-
-      expect(secondController).not.toBe(firstController);
     });
   });
 

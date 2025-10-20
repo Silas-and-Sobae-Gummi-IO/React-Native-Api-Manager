@@ -37,15 +37,15 @@ describe('LoggerInterceptor', () => {
       expect(client.interceptors.hooks.has('request:onResponse')).toBe(true);
     });
 
-    it('sets default debug config with enable=true and scope=*', async () => {
+    it('sets default debug config with enable=false and scope=*', async () => {
       const client = new ApiClient();
       const logger = client.interceptors.providers.get('logger');
       
-      const config = logger._onSetup({});
+      const defaultConfig = logger._getDefaultConfig();
 
-      // Logger should set defaults in request:defaultConfig hook
-      expect(config.debug).toEqual({
-        enable: true,
+      // Logger should define default config
+      expect(defaultConfig).toEqual({
+        enable: false,
         scope: '*',
       });
     });
@@ -186,20 +186,36 @@ describe('LoggerInterceptor', () => {
   });
 
   describe('Default config setup', () => {
-    it('merges debug defaults without overriding existing config', async () => {
-      const client = new ApiClient({
-        debug: {enable: false}, // User explicitly disabled
-      });
-      const logger = client.interceptors.providers.get('logger');
+    it('respects user config and merges with defaults', () => {
+      const logger = new LoggerInterceptor();
+      // Don't need to call init, just test the _normalizeConfig helper directly
+      logger._manager = {}; // Mock manager (not used in this test)
       
-      const config = logger._onSetup({existingKey: 'value'});
+      // Test with user config that has debug.enable = false
+      const config = logger._normalizeConfig({debug: {enable: false}}, 'debug');
 
-      expect(config).toEqual({
-        existingKey: 'value',
-        debug: {
-          enable: true,
-          scope: '*',
-        },
+      expect(config.debug).toEqual({
+        enable: false,
+        scope: '*',
+      });
+    });
+
+    it('normalizes boolean shorthand to object', () => {
+      const logger = new LoggerInterceptor();
+      logger._manager = {}; // Mock manager (not used in this test)
+      
+      // Test debug: true shorthand
+      const config1 = logger._normalizeConfig({debug: true}, 'debug');
+      expect(config1.debug).toEqual({
+        enable: true,
+        scope: '*',
+      });
+
+      // Test debug: false shorthand
+      const config2 = logger._normalizeConfig({debug: false}, 'debug');
+      expect(config2.debug).toEqual({
+        enable: false,
+        scope: '*',
       });
     });
   });

@@ -4,8 +4,8 @@ import {BaseInterceptor} from './BaseInterceptor';
 import {LoggerInterceptor} from './LoggerInterceptor';
 import {StatusHandlerInterceptor} from './StatusHandlerInterceptor';
 import {CancelKeyInterceptor} from './CancelKeyInterceptor';
+import {CacheInterceptor} from './CacheInterceptor';
 // import {MetricsInterceptor} from './MetricsInterceptor';
-// import {CacheInterceptor} from './CacheInterceptor';
 // import {RateLimitInterceptor} from './RateLimitInterceptor';
 import {parseResponse} from '../lib/responseParser';
 // import {RetryInterceptor} from './RetryInterceptor';
@@ -16,20 +16,23 @@ import {parseResponse} from '../lib/responseParser';
  */
 export class CoreInterceptor extends BaseInterceptor {
   static name = 'core';
+  static defaultConfig = {
+    autoFixJson: true,
+  };
 
   register() {
     // Attach built-in interceptors immediately during Core registration
     this._manager.attach(LoggerInterceptor);
     this._manager.attach(StatusHandlerInterceptor);
     this._manager.attach(CancelKeyInterceptor);
+    this._manager.attach(CacheInterceptor);
     // TODO: Re-enable after ConfigManager refactor
     // this._manager.attach(MetricsInterceptor);
-    // this._manager.attach(CacheInterceptor);
     // this._manager.attach(RateLimitInterceptor);
     // this._manager.attach(RetryInterceptor);
 
-    // Set default config for JSON APIs
-    this._manager.add('request:defaultConfig', 'core:defaults', this._setDefaults.bind(this), 10);
+    // Set default headers for JSON APIs
+    this._manager.add('request:defaultConfig', 'core:defaults', this._setDefaults.bind(this), 5);
 
     // Wire up response parsing
     this._manager.add('request:formatData', 'core:parseResponse', this._parseResponse.bind(this), 10);

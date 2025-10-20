@@ -22,6 +22,16 @@ import {BaseInterceptor} from './BaseInterceptor';
  */
 export class CacheInterceptor extends BaseInterceptor {
   static name = 'cache';
+  static defaultConfig = {
+    enable: false,
+    ttl: 60000,
+    maxSize: 100,
+    storage: 'memory',
+    keyGenerator: null,
+    shouldCache: null,
+  };
+  
+  configKey = 'cache';
 
   constructor() {
     super();
@@ -29,7 +39,8 @@ export class CacheInterceptor extends BaseInterceptor {
   }
 
   register() {
-    this._manager.add('request:defaultConfig', 'cache:defaults', this._setDefaults.bind(this), 10);
+    this._useShorthandConfig();
+    
     this._manager.add('request:beforeRequest', 'cache:invalidate', this._invalidateCache.bind(this), 40);
     this._manager.add('request:beforeRequest', 'cache:check', this._checkCache.bind(this), 50);
     // Skip fetch and return cached data if available
@@ -38,30 +49,8 @@ export class CacheInterceptor extends BaseInterceptor {
     this._manager.add('request:formatData', 'cache:store', this._storeCache.bind(this), 999);
   }
 
-  _setDefaults(config) {
-    // Normalize boolean shorthand: cache: true/false -> cache: {enable: true/false}
-    let cacheConfig = config.cache;
-    if (cacheConfig === true) {
-      cacheConfig = {enable: true};
-    } else if (cacheConfig === false) {
-      cacheConfig = {enable: false};
-    }
-
-    return {
-      ...config,
-      cache: {
-        enable: false,
-        ttl: 60000, // 1 minute default
-        maxSize: 100,
-        storage: 'memory',
-        keyGenerator: null,
-        shouldCache: null,
-        ...(cacheConfig || {}),
-      },
-    };
-  }
-
-  _returnCached(skipValue, context) {
+  _returnCached(skipValue, hookContext) {
+    const {context} = hookContext;
     if (context._cacheHit) {
       return context._cachedData;
     }
@@ -98,7 +87,10 @@ export class CacheInterceptor extends BaseInterceptor {
     }
 
     // Default key: method:url:params
-    const {method, url, params} = config;
+    // Note: config may have full merged config or partial from _storeCache
+    const method = config.method || 'GET';
+    const url = config.url || '';
+    const params = config.params;
     const paramsStr = params ? JSON.stringify(params) : '';
     return `${method}:${url}:${paramsStr}`;
   }
@@ -113,7 +105,8 @@ export class CacheInterceptor extends BaseInterceptor {
       return;
     }
 
-    const key = this._generateCacheKey({method: options.method, url, params: config.params});
+    // Generate key with url/method from hook context
+    const key = this._generateCacheKey({...config, url, method: options.method});
     const storage = this._getStorage(config);
     const cached = storage.get(key);
 
@@ -124,8 +117,8 @@ export class CacheInterceptor extends BaseInterceptor {
     }
   }
 
-  async _storeCache(data, context) {
-    const {config} = context;
+  async _storeCache(data, hookContext) {
+    const {config, context} = hookContext;
 
     // Do not store if served from cache
     if (context._cacheHit) {
@@ -137,7 +130,7 @@ export class CacheInterceptor extends BaseInterceptor {
     }
 
     // Only cache GET requests by default
-    if (context.config.method !== 'GET') {
+    if (config.method !== 'GET') {
       return data;
     }
 
@@ -155,11 +148,7 @@ export class CacheInterceptor extends BaseInterceptor {
       }
     }
 
-    const key = this._generateCacheKey({
-      method: context.config.method,
-      url: context.config.url,
-      params: context.config.params,
-    });
+    const key = this._generateCacheKey(config);
 
     const storage = this._getStorage(config);
     const ttl = typeof config.cache === 'object' ? config.cache.ttl : config.cache.ttl;
