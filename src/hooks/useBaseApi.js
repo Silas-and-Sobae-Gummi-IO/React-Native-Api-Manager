@@ -21,12 +21,12 @@ import {InterceptorManager} from '../client/lib/InterceptorManager';
  * @param {Function} config.onDataChanged - Called when data changes (prevData, newData) => void
  * @param {Function} config.onReset - Called when reset() is invoked
  * @param {Function} config.onAbort - Called when abort() is invoked with (reason)
- * @param {InterceptorManager} config.interceptors - Optional interceptor manager (for extensions)
+ * @param {InterceptorManager} interceptors - Required interceptor manager (for extensions)
  * @param {Object} config.* - Any other ApiClient request config (headers, timeout, recovery, etc.)
  *
  * @returns {Object} API state and methods
  */
-export function useBaseApi(config, interceptors = null) {
+export function useBaseApi(config, interceptors) {
   const {
     client: providedClient,
     url,
@@ -59,9 +59,6 @@ export function useBaseApi(config, interceptors = null) {
   // Track previous data for onDataChanged
   const prevDataRef = useRef(initialData);
 
-  // Use provided interceptors or create new one
-  const hooksRef = useRef(interceptors || new InterceptorManager());
-
   // Store updateResult function in ref so extensions can override it
   const updateResultRef = useRef(null);
 
@@ -76,7 +73,7 @@ export function useBaseApi(config, interceptors = null) {
   // Lifecycle hooks: onMount and onUnmount
   useEffect(() => {
     (async () => {
-      await hooksRef.current.run('onMount', undefined, {
+      await interceptors.run('onMount', undefined, {
         data,
         response,
         error,
@@ -86,7 +83,7 @@ export function useBaseApi(config, interceptors = null) {
 
     return () => {
       (async () => {
-        await hooksRef.current.run('onUnmount', undefined, {
+        await interceptors.run('onUnmount', undefined, {
           data,
           response,
           error,
@@ -112,7 +109,7 @@ export function useBaseApi(config, interceptors = null) {
     let finalData = {...data, ...overrides};
 
     // Run beforeSend hooks (extensions can modify finalData)
-    finalData = await hooksRef.current.run('beforeSend', finalData, {data, overrides});
+    finalData = await interceptors.run('beforeSend', finalData, {data, overrides});
 
     // Filter/transform data if provided
     if (filterData) {
@@ -171,7 +168,7 @@ export function useBaseApi(config, interceptors = null) {
       onSuccess?.(parsedData);
 
       // Run afterSend hooks (extensions can react to response)
-      await hooksRef.current.run('afterSend', parsedData, {data: finalData, response: parsedData, result, fullResponse});
+      await interceptors.run('afterSend', parsedData, {data: finalData, response: parsedData, result, fullResponse});
 
       return parsedData;
     } catch (err) {
@@ -183,7 +180,7 @@ export function useBaseApi(config, interceptors = null) {
       onError?.(err);
 
       // Run onError hooks
-      await hooksRef.current.run('onError', err, {data: finalData});
+      await interceptors.run('onError', err, {data: finalData});
 
       throw err;
     }
@@ -249,7 +246,7 @@ export function useBaseApi(config, interceptors = null) {
    */
   const reset = async () => {
     // Run beforeReset hooks
-    await hooksRef.current.run('beforeReset', undefined, {data, response, result, error});
+    await interceptors.run('beforeReset', undefined, {data, response, result, error});
 
     setData(initialData);
     setResponse(null);
@@ -259,7 +256,7 @@ export function useBaseApi(config, interceptors = null) {
     onReset?.();
 
     // Run afterReset hooks
-    await hooksRef.current.run('afterReset', undefined, {});
+    await interceptors.run('afterReset', undefined, {});
   };
 
   /**
@@ -273,7 +270,7 @@ export function useBaseApi(config, interceptors = null) {
       onAbort?.(reason);
 
       // Run onAbort hooks
-      await hooksRef.current.run('onAbort', reason, {request});
+      await interceptors.run('onAbort', reason, {request});
     }
   };
 
