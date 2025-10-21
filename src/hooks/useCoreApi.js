@@ -3,6 +3,7 @@ import {InterceptorManager} from '../client/lib/InterceptorManager';
 import {useBaseApi} from './useBaseApi';
 import {useRefresh} from './extensions/useRefresh';
 import {usePagination} from './extensions/usePagination';
+import {useAutoFetch} from './extensions/useAutoFetch';
 
 /**
  * useCoreApi - Public API hook with extension support
@@ -21,7 +22,9 @@ import {usePagination} from './extensions/usePagination';
  * @param {Function} config.onError - Error callback
  * @param {Object} config.pagination - Pagination extension config (optional)
  * @param {Object|boolean} config.refresh - Refresh extension config (optional). Pass true or {onRefresh}
- * @param {Object} config.* - Any other config is passed to ApiClient
+ * @param {Object|boolean} config.autoFetch - Auto-fetch extension config (optional). Pass true or {enabled, fetchData}
+ * @param {Object} config.extensions - User-defined extensions {extensionName: useExtensionHook}
+ * @param {Object} config.* - Any other config is passed to ApiClient and extensions
  * 
  * @returns {Object} API state and methods (with extensions if configured)
  * 
@@ -51,33 +54,59 @@ import {usePagination} from './extensions/usePagination';
  *   url: 'GET:/posts',
  *   refresh: true
  * });
+ * 
+ * @example
+ * // With custom extensions
+ * const api = useCoreApi({
+ *   client: apiClient,
+ *   url: 'GET:/posts',
+ *   extensions: {
+ *     analytics: useAnalyticsExtension,
+ *     retry: useRetryExtension
+ *   },
+ *   analytics: {tracker: myTracker},
+ *   retry: {maxAttempts: 3}
+ * });
  */
 export function useCoreApi(config) {
-  const {refresh: refreshConfig, pagination: paginationConfig, ...baseConfig} = config;
+  // Built-in extensions registry
+  const builtInExtensions = {
+    pagination: usePagination,
+    refresh: useRefresh,
+    autoFetch: useAutoFetch,
+  };
+
+  // Merge with user extensions
+  const allExtensions = {
+    ...builtInExtensions,
+    ...(config.extensions || {}),
+  };
 
   // Create interceptor manager for extensions
   const interceptorsRef = useRef(new InterceptorManager());
   const interceptors = interceptorsRef.current;
 
   // Create base API first with shared interceptors
-  const baseApi = useBaseApi(baseConfig, interceptors);
+  const baseApi = useBaseApi(config, interceptors);
 
-  // Call extension hooks unconditionally (pass null if not configured)
-  // Extensions manage their own state and register interceptors
-  const paginationExt = usePagination(interceptors, baseApi, paginationConfig);
-  const refreshExt = useRefresh(
-    interceptors,
-    baseApi,
-    typeof refreshConfig === 'object' ? refreshConfig : refreshConfig ? {} : null
-  );
+  // Apply all extensions (called unconditionally via map)
+  const extensionResults = Object.entries(allExtensions).map(([key, useExtension]) => {
+    // Get extension-specific config from root config
+    const extensionConfig = config[key];
+
+    // Normalize boolean configs to objects
+    const normalizedConfig = 
+      typeof extensionConfig === 'boolean' 
+        ? (extensionConfig ? {} : null)
+        : extensionConfig;
+
+    // Call extension hook
+    return useExtension(interceptors, baseApi, normalizedConfig);
+  });
 
   // Merge all state and methods
   return {
     ...baseApi,
-    ...paginationExt,
-    ...refreshExt,
+    ...Object.assign({}, ...extensionResults),
   };
 }
-
-// Export as useApi for convenience
-export {useCoreApi as useApi};

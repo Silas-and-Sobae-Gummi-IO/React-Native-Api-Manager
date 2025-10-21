@@ -49,11 +49,22 @@ export function usePagination(interceptors, baseApi, config) {
     onLoadMore?.();
 
     try {
+      // Run pagination:beforeLoadMore hooks
+      await interceptors.run('pagination:beforeLoadMore', undefined, {
+        currentData: baseApi.data,
+        lastResponse: lastResponseRef.current,
+      });
+
       // Get next page data (supports cursor pagination)
       const nextPageData = getNextPageData(baseApi.data, lastResponseRef.current);
 
       // Send request with page overrides (doesn't trigger onDataChanged)
       const response = await baseApi.send(nextPageData);
+
+      // Run pagination:afterLoadMore hooks
+      await interceptors.run('pagination:afterLoadMore', response, {
+        nextPageData,
+      });
 
       setIsLoadingMore(false);
       return response;
@@ -102,10 +113,16 @@ export function usePagination(interceptors, baseApi, config) {
       resetPagination();
     }, 10);
 
+    // Before refresh: reset pagination (back to page 1)
+    interceptors.add('refresh:beforeSend', 'pagination:resetOnRefresh', () => {
+      resetPagination();
+    }, 10);
+
     // Cleanup on unmount
     return () => {
       interceptors.remove('afterSend', 'pagination:afterSend');
       interceptors.remove('beforeReset', 'pagination:beforeReset');
+      interceptors.remove('refresh:beforeSend', 'pagination:resetOnRefresh');
     };
   }, [results]); // Re-register when results change (for shouldReplace check)
 

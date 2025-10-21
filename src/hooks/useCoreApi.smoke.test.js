@@ -90,6 +90,34 @@ describe('useCoreApi - Smoke Test', () => {
     expect(result.current.response).toEqual({data: 'refreshed'});
   });
 
+  test('with autoFetch extension', async () => {
+    let fetchCount = 0;
+    global.fetch.mockImplementation(async () => {
+      fetchCount++;
+      return {
+        ok: true,
+        json: async () => ({data: 'auto-fetched', count: fetchCount}),
+      };
+    });
+
+    const {result} = renderHook(() =>
+      useCoreApi({
+        client,
+        url: 'GET:/posts',
+        initialData: {category: 'tech'},
+        autoFetch: true,
+      })
+    );
+
+    // Should auto-fetch on mount
+    await act(async () => {
+      await new Promise(resolve => setTimeout(resolve, 10)); // Wait for onMount
+    });
+
+    expect(fetchCount).toBe(1);
+    expect(result.current.response).toBeDefined();
+  });
+
   test('without extensions (conditional configs = null)', async () => {
     global.fetch.mockResolvedValue({
       ok: true,

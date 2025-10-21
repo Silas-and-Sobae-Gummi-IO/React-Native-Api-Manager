@@ -31,6 +31,9 @@ export function useRefresh(interceptors, baseApi, config) {
     onRefresh?.();
 
     try {
+      // Run refresh:beforeSend hooks (other extensions can react)
+      await interceptors.run('refresh:beforeSend', undefined, {resetData});
+
       // Optionally reset data state
       if (resetData) {
         baseApi.reset();
@@ -38,6 +41,9 @@ export function useRefresh(interceptors, baseApi, config) {
 
       // Send request with current data
       const result = await baseApi.send();
+
+      // Run refresh:afterSend hooks
+      await interceptors.run('refresh:afterSend', result, {resetData});
       
       setIsRefreshing(false);
       return result;
