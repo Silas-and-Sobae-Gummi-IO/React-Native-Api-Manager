@@ -374,11 +374,20 @@ describe('useBaseApi', () => {
         })
       );
 
-      act(() => {
+      // Start first request
+      await act(async () => {
         result.current.send();
-        result.current.send(); // Second call should be ignored
+        await new Promise((resolve) => setTimeout(resolve, 10)); // Let isLoading update
       });
 
+      expect(result.current.isLoading).toBe(true);
+
+      // Try to start second request while first is in progress
+      await act(async () => {
+        await result.current.send(); // Second call should be ignored
+      });
+
+      // Wait for first request to complete
       await act(async () => {
         await new Promise((resolve) => setTimeout(resolve, 150));
       });
