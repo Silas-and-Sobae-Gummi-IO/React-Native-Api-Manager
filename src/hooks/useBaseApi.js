@@ -1,4 +1,4 @@
-import {useState, useRef, useEffect} from 'react';
+import {useState, useRef, useEffect, useCallback} from 'react';
 import {ApiClient} from '../client/ApiClient';
 import {InterceptorManager} from '../client/lib/InterceptorManager';
 
@@ -49,6 +49,7 @@ export function useBaseApi(config, interceptors = null) {
   // Hook state (reactive)
   const [data, setData] = useState(initialData);
   const [response, setResponse] = useState(null);
+  const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -60,6 +61,9 @@ export function useBaseApi(config, interceptors = null) {
 
   // Use provided interceptors or create new one
   const hooksRef = useRef(interceptors || new InterceptorManager());
+
+  // Store updateResult function in ref so extensions can override it
+  const updateResultRef = useRef(null);
 
   // Effect to trigger onDataChanged when data updates
   useEffect(() => {
@@ -160,13 +164,14 @@ export function useBaseApi(config, interceptors = null) {
 
       // Update state on success
       setResponse(parsedData);
+      updateResultRef.current(parsedData); // Use ref so extensions can intercept
       setIsLoading(false);
 
       // Call success callback with parsed data
       onSuccess?.(parsedData);
 
       // Run afterSend hooks (extensions can react to response)
-      await hooksRef.current.run('afterSend', parsedData, {data: finalData, response: parsedData, fullResponse});
+      await hooksRef.current.run('afterSend', parsedData, {data: finalData, response: parsedData, result, fullResponse});
 
       return parsedData;
     } catch (err) {
@@ -217,14 +222,38 @@ export function useBaseApi(config, interceptors = null) {
   };
 
   /**
+   * Default implementation of updateResult
+   */
+  const defaultUpdateResult = useCallback((newResult) => {
+    setResult(newResult);
+  }, []);
+
+  /**
+   * Initialize updateResultRef with default implementation
+   */
+  if (!updateResultRef.current) {
+    updateResultRef.current = defaultUpdateResult;
+  }
+
+  /**
+   * Update result state (for extensions)
+   * Calls the current implementation (might be overridden by extensions)
+   * @param {any} newResult - New result value
+   */
+  const updateResult = useCallback((newResult) => {
+    updateResultRef.current(newResult);
+  }, []);
+
+  /**
    * Reset to initial state
    */
   const reset = async () => {
     // Run beforeReset hooks
-    await hooksRef.current.run('beforeReset', undefined, {data, response, error});
+    await hooksRef.current.run('beforeReset', undefined, {data, response, result, error});
 
     setData(initialData);
     setResponse(null);
+    setResult(null);
     setError(null);
     setIsLoading(false);
     onReset?.();
@@ -253,6 +282,7 @@ export function useBaseApi(config, interceptors = null) {
     // State
     data,
     response,
+    result,
     error,
     isLoading,
 
@@ -260,6 +290,7 @@ export function useBaseApi(config, interceptors = null) {
     updateData,
     setData: replaceData,
     handleDataChange, // Convenience for forms
+    updateResult,
 
     // Request methods
     send,
@@ -268,5 +299,8 @@ export function useBaseApi(config, interceptors = null) {
 
     // Expose current request instance (for advanced users)
     request: currentRequestRef.current,
+
+    // Internal refs for extensions
+    _updateResultRef: updateResultRef,
   };
 }

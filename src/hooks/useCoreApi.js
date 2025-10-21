@@ -4,6 +4,7 @@ import {useBaseApi} from './useBaseApi';
 import {useRefresh} from './extensions/useRefresh';
 import {usePagination} from './extensions/usePagination';
 import {useAutoFetch} from './extensions/useAutoFetch';
+import {usePersist} from './extensions/usePersist';
 
 /**
  * useCoreApi - Public API hook with extension support
@@ -71,6 +72,7 @@ import {useAutoFetch} from './extensions/useAutoFetch';
 export function useCoreApi(config) {
   // Built-in extensions registry
   const builtInExtensions = {
+    persist: usePersist,
     pagination: usePagination,
     refresh: useRefresh,
     autoFetch: useAutoFetch,

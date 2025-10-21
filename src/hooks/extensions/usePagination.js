@@ -30,7 +30,17 @@ export function usePagination(interceptors, baseApi, config) {
     onLoadMore,
   } = config;
 
-  const [results, setResults] = useState([]);
+  // Use baseApi.result for accumulated results
+  // Keep local state as fallback for non-persist usage
+  const results = baseApi.result || [];
+  
+  // Ensure result is initialized as empty array if null
+  useEffect(() => {
+    if (baseApi.result === null) {
+      baseApi.updateResult([]);
+    }
+  }, []);
+  
   const [hasMore, setHasMore] = useState(true);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
 
@@ -78,7 +88,7 @@ export function usePagination(interceptors, baseApi, config) {
    * Reset pagination state
    */
   const resetPagination = () => {
-    setResults([]);
+    baseApi.updateResult([]);
     setHasMore(true);
     setIsLoadingMore(false);
     lastResponseRef.current = null;
@@ -98,9 +108,9 @@ export function usePagination(interceptors, baseApi, config) {
       const replace = shouldReplace({results, response: parsedData, context});
 
       if (replace) {
-        setResults(newResults);
+        baseApi.updateResult(newResults);
       } else {
-        setResults(prev => [...prev, ...newResults]);
+        baseApi.updateResult([...results, ...newResults]);
       }
 
       // Update hasMore status
