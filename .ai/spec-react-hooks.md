@@ -1,172 +1,292 @@
-# **Technical Specification: The `useApi` Hook Suite**
+# React Hooks - Technical Specification
 
-## **1. Overview & Core Philosophy**
+## Current Implementation Status
 
-`useApi` is a single, comprehensive React hook designed to handle the entire lifecycle of an API interaction. It serves as a unified entry point for fetching, mutating, and managing server state. Its primary goal is to make data fetching declarative, robust, and simple, abstracting away the complexities of caching, state synchronization, and race conditions.
+✅ **Phase 1A: Core (useBaseApi)** - COMPLETE
+- Manual request manager with reactive data state
+- No auto-fetch, no caching (keeping it simple)
+- ~176 lines
 
-The hook is powered by a **zero-config, global cache** that operates behind the scenes. This intentional design choice **eliminates the need for a `<Provider>` wrapper**, making setup effortless. The hook intelligently adapts its behavior and return values based on a single configuration object, allowing it to function as a query, mutation, or infinite query hook while maintaining a simple and consistent API.
+🔄 **In Progress:**
+- Testing useBaseApi
 
------
+📋 **TODO Extensions (in order):**
+1. Pagination extension (infinite scroll, load more)
+2. Refresh extension (pull-to-refresh)
+3. Auto-fetch extension (fetch on mount with `enabled`)
+4. Caching extension (optional global store integration)
 
-## **2. The Unified `useApi` Hook**
+---
 
-This is the only hook the end-user will need to import and use.
+## Core Philosophy
 
-### **Function Signature**
+`useApi` is a **manual request manager** that handles API request lifecycle with reactive data state. Unlike React Query, it does NOT auto-fetch or cache by default. Instead:
 
-```javascript
-useApi(config)
+- **Base hook** - Simple request state manager
+- **Extensions** - Opt-in features (pagination, refresh, caching)
+- **Manual control** - User triggers requests explicitly
+- **Composable** - Extensions add state and methods via their own hooks
+
+---
+
+## Current API
+
+### useBaseApi (Internal)
+
+**Location:** `src/hooks/useBaseApi.js`
+
+**Config:**
+```js
+{
+  client: ApiClient,        // Required
+  url: string,              // 'GET:/posts' or '/posts'
+  initialData: object,      // Initial data state
+  onSuccess: (response) => void,
+  onError: (error) => void
+}
 ```
 
-  * **`config`**: A single configuration object that defines the hook's behavior. The properties within this object determine which "mode" the hook will operate in.
+**Returns:**
+```js
+{
+  // State (reactive)
+  data: object,             // Form/request data
+  response: object|null,    // Last API response
+  error: Error|null,        // Last error
+  isLoading: boolean,       // Request in flight
+  
+  // Methods
+  send: (overrides?) => Promise,     // Trigger request
+  updateData: (key, value) => void,  // Update single field
+  setData: (newData) => void,        // Replace entire data
+  reset: () => void                  // Reset to initialData
+}
+```
 
------
+### useCoreApi / useApi (Public)
 
-## **3. Modes of Operation**
+**Location:** `src/hooks/useCoreApi.js`
 
-The `useApi` hook intelligently dispatches to one of the following internal modes based on the `config` object.
+Wraps `useBaseApi` and conditionally applies extensions. Same API as base + extensions.
 
-### **A) Query Mode (Default)**
+---
 
-This is the primary mode for fetching and caching "read" operations (GET requests). It's the workhorse for displaying any server data in your UI.
+## Usage Examples
 
-  * **Activation**: This mode is activated when the `config` object contains a `queryKey` and a `queryFn`.
-  * **Use Case**: Fetching a user's profile, a list of products, or configuration settings. Any time you need to "read" data and show it.
-  * **Example Config**:
-    ```javascript
-    const { data, isLoading } = useApi({
-      queryKey: ['user', userId],
-      queryFn: () => apiClient.get(`/users/${userId}`),
-    });
-    ```
-  * **Returned State & Methods**:
-      * `data`, `error`
-      * `isLoading`: `boolean` - True only on the initial fetch when no cached data exists. Useful for showing a full-screen skeleton loader.
-      * `isFetching`: `boolean` - True whenever a request is in-flight, including background refetches. Useful for showing a subtle loading spinner in a corner.
-      * `isSuccess`, `isError`: `boolean`
-      * `refetch`: A function to manually trigger a refetch.
+### Basic Request
 
-### **B) Mutation Mode**
+```js
+const api = useApi({
+  client: apiClient,
+  url: 'GET:/posts',
+  initialData: { category: 'tech' }
+});
 
-This mode is for performing "write" operations (POST, PUT, PATCH, DELETE). It's designed for actions, not for displaying data.
+// Manual trigger
+const handleFetch = async () => {
+  try {
+    const response = await api.send();
+    console.log(response);
+  } catch (error) {
+    console.error(api.error);
+  }
+};
+```
 
-  * **Activation**: This mode is activated when the `config` object contains a `mutationFn`. It **never** runs automatically.
-  * **Use Case**: Submitting a form, deleting a todo item, liking a post. Any action that a user takes to change data on the server.
-  * **Example Config**:
-    ```javascript
-    const { mutate, isLoading } = useApi({
-      mutationFn: (newTodo) => apiClient.post('/todos', newTodo),
-      // After success, invalidate the 'todos' query to refetch the list
-      onSuccess: () => agent.invalidateQueries(['todos']),
-    });
+### Form with Reactive Data
 
-    const handleSubmit = () => mutate({ title: 'A new todo' });
-    ```
-  * **Returned State & Methods**:
-      * `mutate`: The function you call to trigger the mutation.
-      * `isLoading`, `isSuccess`, `isError`
-      * `data`: The data returned from the mutation's response.
-      * `error`
+```jsx
+const api = useApi({
+  client: apiClient,
+  url: 'POST:/users',
+  initialData: { name: '', email: '' }
+});
 
-### **C) Infinite Query Mode**
+return (
+  <>
+    <TextInput 
+      value={api.data.name}
+      onChange={(text) => api.updateData('name', text)}
+    />
+    <TextInput 
+      value={api.data.email}
+      onChange={(text) => api.updateData('email', text)}
+    />
+    
+    <Button 
+      onPress={() => api.send()} 
+      disabled={api.isLoading}
+    >
+      {api.isLoading ? 'Saving...' : 'Submit'}
+    </Button>
+  </>
+);
+```
 
-A specialized version of Query Mode for "infinite scroll" or "load more" UIs.
+---
 
-  * **Activation**: When `config` contains a `queryKey`, `queryFn`, and a `getNextPageParam` function.
-  * **Use Case**: Displaying long, paginated lists like a social media feed, a product catalog, or a chat history.
-  * **Example Config**:
-    ```javascript
-    const { data, fetchNextPage, hasNextPage, isLoadingMore } = useApi({
-      queryKey: ['projects'],
-      queryFn: ({ pageParam = 1 }) => apiClient.get(`/projects?page=${pageParam}`),
-      getNextPageParam: (lastPage) => lastPage.nextPage ?? undefined,
-    });
-    ```
-  * **Returned State & Methods**:
-      * All returns from Query Mode, plus:
-      * `data`: An object `{ pages: [], pageParams: [] }` containing all fetched pages.
-      * `fetchNextPage`: A function to fetch the next page.
-      * `hasNextPage`: `boolean` - True if there is more data to load.
-      * `isLoadingMore`: `boolean` - True only while `fetchNextPage` is running.
+## TODO: Planned Extensions
 
------
+### 1. Pagination Extension (Phase 1B)
 
-## **4. Universal Configuration Options**
+**Priority:** HIGH - Most common use case
 
-These options can be used in any mode to control behavior.
+**Config:**
+```js
+const api = useApi({
+  client,
+  url: 'GET:/posts',
+  initialData: { page: 1 },
+  pagination: {
+    hasMoreFn: (response) => response.hasMore  // Determine if more pages
+  }
+});
+```
 
-### **General**
+**Additional Returns:**
+```js
+{
+  results: [],              // Accumulated results
+  hasMore: boolean,         // Has next page
+  isLoadingMore: boolean,   // Loading state for loadMore()
+  loadMore: () => Promise,  // Load next page (increments data.page, appends to results)
+  resetPagination: () => void  // Clear results, reset page
+}
+```
 
-  * `enabled`: `boolean`
+**Use Cases:**
+- Infinite scroll (FlatList onEndReached)
+- Load more button
+- Cursor-based pagination (not just page numbers)
 
-      * **Description**: If `false`, a query will not run automatically.
-      * **Common Scenario**: For **dependent queries**. You need to fetch a user's profile, and *only after* you have their `userId`, you fetch their posts. The posts query would have `enabled: !!user.id`.
+---
 
-  * `onSuccess(data, variables?)` / `onError(error, variables?)`
+### 2. Refresh Extension (Phase 1C)
 
-      * **Description**: Side-effect callbacks that fire after a query or mutation completes.
-      * **Common Scenario**: Showing a success toast notification after a form submission: `onSuccess: () => toast.success('Profile updated!')`.
+**Priority:** HIGH - Pull-to-refresh is standard
 
-  * `debug`: `boolean`
+**Config:**
+```js
+const api = useApi({
+  client,
+  url: 'GET:/posts',
+  refresh: true
+});
+```
 
-      * **Description**: If `true`, logs the hook's entire lifecycle (`fetching`, `success`, `using cache`, `error`, etc.) to the console.
-      * **Common Scenario**: A query is re-fetching more often than you expect. You turn on `debug: true` to see a step-by-step log in the console that tells you exactly why the hook is making its decisions.
+**Additional Returns:**
+```js
+{
+  isRefreshing: boolean,    // Separate from isLoading
+  refresh: () => Promise    // Reset + send
+}
+```
 
-### **Caching & Synchronization (Primarily for Query Mode)**
+**Use Cases:**
+- FlatList refreshControl
+- Pull-to-refresh gesture
+- Manual refresh button
 
-  * `staleTime`: `number` (Default: `0`)
+---
 
-      * **Description**: The time in `ms` before fetched data is considered "stale." If a component mounts and its data in the cache is not stale, no network request will be made.
-      * **Common Scenario**: You have data that doesn't change very often, like a list of countries. You set `staleTime: 600000` (10 minutes). Now, when a user navigates to the country list screen, the data loads **instantly** from the cache. The app feels incredibly fast because it's not waiting for the network.
+### 3. Auto-Fetch Extension (Phase 2)
 
-  * `cacheTime`: `number` (Default: `300000` - 5 mins)
+**Priority:** MEDIUM - Convenience feature
 
-      * **Description**: The time in `ms` an *inactive* query's data is kept in the cache before being garbage collected.
-      * **Common Scenario**: A user navigates away from a screen. The `cacheTime` is the grace period during which, if they navigate back, the data will still be there for an instant load.
+**Config:**
+```js
+const api = useApi({
+  client,
+  url: 'GET:/posts',
+  autoFetch: true,          // Fetch on mount
+  enabled: !!userId,        // Conditional fetching
+  refetchOnFocus: true      // Refetch on window focus
+});
+```
 
-  * `refetchOnFocus`: `boolean` (Default: `true`)
+**Additional State:**
+```js
+{
+  isInitialLoading: boolean  // First ever fetch
+}
+```
 
-      * **Description**: Automatically refetches the data for this query when the app screen comes into focus.
-      * **Common Scenario**: A user opens your app, checks their messages, then switches to another app. While they are away, a new message arrives. When they switch back to your app, `refetchOnFocus` automatically triggers a fresh fetch of their messages, ensuring the UI is always up-to-date without needing to pull-to-refresh.
+---
 
-  * `keepPreviousData`: `boolean` (Default: `false`)
+### 4. Caching Extension (Phase 2+)
 
-      * **Description**: If `true`, the `data` from the last successful fetch will be preserved while a new request is in flight.
-      * **Common Scenario**: This solves the jarring **UI flash**. A user is viewing a list of products, then clicks a "Sort by Price" button. Without this option, the list would disappear for a moment while the sorted list is loading. With `keepPreviousData: true`, the old list remains visible (you can style it as "stale" using the `isFetching` flag) until the new data arrives, creating a smooth transition.
+**Priority:** LOW - Advanced feature
 
-  * `select`: `(data) => any`
+**Features:**
+- Global cache with queryKey
+- Stale-while-revalidate
+- Request deduplication
+- Cache invalidation
+- Optional store integration (Zustand, Redux, etc.)
 
-      * **Description**: A function to transform or select a part of the data. The component will only re-render if the selected/transformed value changes.
-      * **Common Scenario**: This is a powerful **performance optimization**. A query returns a huge user object, but your component only displays the user's name. You use `select: (data) => data.name`. Now, if something else in the user object (like `lastLoginAt`) updates in the background, your component will not needlessly re-render because the name it selected hasn't changed.
+**Config:**
+```js
+const api = useApi({
+  client,
+  url: 'GET:/posts',
+  queryKey: ['posts', filters],
+  staleTime: 60000,
+  cacheTime: 300000
+});
+```
 
------
+---
 
-## **5. Automatic "Magical" Features (Zero-Config)**
+### 5. Race Condition Protection (Future)
 
-These powerful features are built-in and work automatically to make your application more robust.
+**Priority:** MEDIUM - Quality of life
 
-  * **Response Staleness Protection**
+**Feature:** Track request IDs, ignore stale responses
 
-      * **Description**: The hook internally tracks the latest request. If an older request's response arrives *after* a newer one has already been processed, the hook simply ignores the outdated data.
-      * **The Problem It Solves**: It prevents **race conditions**. Without it, a fast typist in a search bar could see results for "react" flicker and be replaced by results for "re" if the network responses arrive out of order. This feature makes that bug impossible.
+**Use Case:** Fast typing in search bar
 
-  * **Request Deduplication**
+---
 
-      * **Description**: If multiple components request the exact same `queryKey` at nearly the same time, the hook is smart enough to only send **one** network request. All components will receive the data from that single request.
-      * **The Problem It Solves**: It prevents wastefully sending identical network requests. If three `<Avatar userId={123} />` components appear on screen, you'll only make one API call to `/users/123`, not three. It's like a smart barista making one batch of coffee for three identical orders.
+### 6. Debug Extension (Future)
 
------
+**Priority:** LOW - Developer experience
 
-## **6. Global API Methods (on the `ApiAgent`)**
+**Config:**
+```js
+const api = useApi({
+  client,
+  url: 'GET:/posts',
+  debug: true  // Console logs lifecycle
+});
+```
 
-These methods on the `ApiAgent` are the bridge that allows your mutations to communicate with your queries.
+---
 
-  * **`agent.invalidateQueries(queryKey)`**
+## Implementation Notes
 
-      * **Description**: Marks all queries matching the `queryKey` as stale and triggers an immediate refetch for all active `useApi` hooks subscribed to them.
-      * **Common Scenario**: This is the most common and important pattern. After a `useApi` mutation to create a new todo succeeds, you call `agent.invalidateQueries(['todos'])`. This tells every `useApi` hook in your app that is displaying the list of todos to automatically refetch itself, ensuring the new todo appears everywhere.
+**Extension Architecture:**
+- Each extension is its own hook with its own state
+- Extensions receive core API and enhance it
+- Extensions are opt-in via config
+- Extensions compose via object spread
 
-  * **`agent.setQueryData(queryKey, data)`**
+**File Structure:**
+```
+src/hooks/
+  useBaseApi.js          # Core (~176 lines)
+  useCoreApi.js          # Orchestrator (~30 lines)
+  extensions/
+    pagination.js        # ~80 lines
+    refresh.js           # ~40 lines
+    autoFetch.js         # Future
+    caching.js           # Future
+```
 
-      * **Description**: Allows you to manually and instantly update the cached data for a query from anywhere, bypassing a network request.
-      * **Common Scenario**: For **optimistic updates**. When a user likes a post, you can call `agent.setQueryData(...)` immediately to update the UI to show the "liked" state *before* the network request even completes. If the request then fails, you can roll back the change in the `onError` callback. This makes the UI feel instantaneous.
+**Testing Strategy:**
+- Test base hook in isolation
+- Test each extension in isolation
+- Test composition (base + extensions)
+
+---
+
+*Last Updated: October 2025*
