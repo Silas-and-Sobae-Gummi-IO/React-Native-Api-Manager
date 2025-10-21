@@ -400,6 +400,78 @@ describe('ApiRequest', () => {
       expect(capturedContext.error).toBeInstanceOf(Error);
       expect(capturedContext.error.message).toBe('Context error');
     });
+
+    it('allows formatError to return non-error value for recovery', async () => {
+      mockFetch.mockRejectedValueOnce(new Error('Network error'));
+
+      class TestRecoveryInterceptor extends BaseInterceptor {
+        static name = 'testRecovery';
+        register() {
+          this._manager.add('request:formatError', 'recover', () => {
+            // Return successful result instead of error
+            return {data: 'recovered'};
+          });
+        }
+      }
+
+      const client = new ApiClient({
+        interceptors: ['-logger', '-core', '-recovery', TestRecoveryInterceptor],
+      });
+      const request = client.get('https://api.example.com/test');
+
+      const result = await request.send();
+
+      expect(result).toEqual({data: 'recovered'});
+    });
+
+    it('treats error-like objects as errors not recovery', async () => {
+      mockFetch.mockRejectedValueOnce(new Error('Original error'));
+
+      class TransformInterceptor extends BaseInterceptor {
+        static name = 'transform';
+        register() {
+          this._manager.add('request:formatError', 'transform', () => {
+            // Return error-like object (has name and message)
+            return {name: 'CustomError', message: 'Transformed error', code: 500};
+          });
+        }
+      }
+
+      const client = new ApiClient({
+        interceptors: ['-logger', '-core', TransformInterceptor],
+      });
+      const request = client.get('https://api.example.com/test');
+
+      await expect(request.send()).rejects.toMatchObject({
+        name: 'CustomError',
+        message: 'Transformed error',
+        code: 500,
+      });
+    });
+
+    it('runs complete hook when formatError returns recovery value', async () => {
+      mockFetch.mockRejectedValueOnce(new Error('Error'));
+
+      let completed = false;
+      class RecoveryWithCompleteInterceptor extends BaseInterceptor {
+        static name = 'recoveryComplete';
+        register() {
+          this._manager.add('request:formatError', 'recover', () => ({data: 'ok'}));
+          this._manager.add('request:complete', 'complete', () => {
+            completed = true;
+          });
+        }
+      }
+
+      const client = new ApiClient({
+        interceptors: ['-logger', '-core', RecoveryWithCompleteInterceptor],
+      });
+      const request = client.get('https://api.example.com/test');
+
+      await request.send();
+
+      expect(completed).toBe(true);
+    });
   });
 
   describe('Complete hook', () => {

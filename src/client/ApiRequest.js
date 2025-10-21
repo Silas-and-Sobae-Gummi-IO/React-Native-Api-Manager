@@ -26,11 +26,14 @@ export class ApiRequest {
     const {url, options} = buildRequestConfig(mergedConfig);
     await this._runInterceptors('request:beforeRequest', undefined, {url, options});
 
+    let result;
+
     try {
       // Allow interceptors to skip fetch and return early (e.g., cache hit)
       const skipValue = await this._runInterceptors('request:skipFetch', null);
       if (skipValue !== null) {
-        return skipValue;
+        result = skipValue;
+        return result;
       }
 
       // Allow interceptors to wrap/override how fetch is performed
@@ -45,9 +48,18 @@ export class ApiRequest {
       response = await this._runInterceptors('request:formatResponse', response);
       await this._runInterceptors('request:onResponse', response);
 
-      return await this._runInterceptors('request:formatData', response);
+      result = await this._runInterceptors('request:formatData', response);
+      return result;
     } catch (error) {
-      error = await this._runInterceptors('request:formatError', error);
+      const formatted = await this._runInterceptors('request:formatError', error);
+      // If a formatter returned a non-error value, treat it as a recovered result
+      // Check for error-like objects (Error, DOMException, etc.)
+      const isErrorLike = formatted instanceof Error || (formatted && typeof formatted === 'object' && 'name' in formatted && 'message' in formatted);
+      if (!isErrorLike) {
+        result = formatted;
+        return result;
+      }
+      error = formatted;
       await this._runInterceptors('request:onError', error);
       const shouldSuppress = await this._runInterceptors('request:suppressError', false, {error});
       if (!shouldSuppress) throw error;
