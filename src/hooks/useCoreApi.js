@@ -1,16 +1,17 @@
+import {useRef} from 'react';
+import {InterceptorManager} from '../client/lib/InterceptorManager';
 import {useBaseApi} from './useBaseApi';
-// Extensions will be imported here as they're implemented
-// import {usePaginationWrapper} from './extensions/pagination';
-// import {useRefreshWrapper} from './extensions/refresh';
+import {useRefresh} from './extensions/useRefresh';
+import {usePagination} from './extensions/usePagination';
 
 /**
  * useCoreApi - Public API hook with extension support
  * 
  * This is the main hook users interact with. It starts with useBaseApi
- * and applies extension wrappers that enhance functionality.
+ * and applies extensions through hook registration (order-independent).
  * 
- * Extension wrappers are ALWAYS called (to satisfy React hooks rules),
- * but only activate if their config is provided.
+ * Extensions register hooks with the base API instead of wrapping it,
+ * making composition cleaner and avoiding method override conflicts.
  * 
  * @param {Object} config
  * @param {ApiClient} config.client - ApiClient instance (required)
@@ -19,7 +20,7 @@ import {useBaseApi} from './useBaseApi';
  * @param {Function} config.onSuccess - Success callback
  * @param {Function} config.onError - Error callback
  * @param {Object} config.pagination - Pagination extension config (optional)
- * @param {boolean} config.refresh - Enable refresh extension (optional)
+ * @param {Object|boolean} config.refresh - Refresh extension config (optional). Pass true or {onRefresh}
  * @param {Object} config.* - Any other config is passed to ApiClient
  * 
  * @returns {Object} API state and methods (with extensions if configured)
@@ -52,19 +53,30 @@ import {useBaseApi} from './useBaseApi';
  * });
  */
 export function useCoreApi(config) {
-  // Start with base API
-  let api = useBaseApi(config);
+  const {refresh: refreshConfig, pagination: paginationConfig, ...baseConfig} = config;
 
-  // Apply extension wrappers (ALWAYS called to satisfy hooks rules)
-  // Each wrapper checks if its config exists and returns enhanced or original API
-  
-  // Pagination extension wrapper
-  // api = usePaginationWrapper(api, config.pagination);
+  // Create interceptor manager for extensions
+  const interceptorsRef = useRef(new InterceptorManager());
+  const interceptors = interceptorsRef.current;
 
-  // Refresh extension wrapper
-  // api = useRefreshWrapper(api, config.refresh);
+  // Create base API first with shared interceptors
+  const baseApi = useBaseApi(baseConfig, interceptors);
 
-  return api;
+  // Call extension hooks unconditionally (pass null if not configured)
+  // Extensions manage their own state and register interceptors
+  const paginationExt = usePagination(interceptors, baseApi, paginationConfig);
+  const refreshExt = useRefresh(
+    interceptors,
+    baseApi,
+    typeof refreshConfig === 'object' ? refreshConfig : refreshConfig ? {} : null
+  );
+
+  // Merge all state and methods
+  return {
+    ...baseApi,
+    ...paginationExt,
+    ...refreshExt,
+  };
 }
 
 // Export as useApi for convenience

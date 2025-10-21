@@ -1,5 +1,6 @@
 import {useState, useRef, useEffect} from 'react';
 import {ApiClient} from '../client/ApiClient';
+import {InterceptorManager} from '../client/lib/InterceptorManager';
 
 /**
  * useBaseApi - Internal base hook for request state management
@@ -11,6 +12,7 @@ import {ApiClient} from '../client/ApiClient';
  * @param {ApiClient} config.client - ApiClient instance (optional - creates one if not provided)
  * @param {string} config.url - Request URL (e.g., 'GET:/posts', 'POST:/users')
  * @param {Object} config.initialData - Initial/default data state (becomes request body)
+ * @param {Function} config.filterData - Transform/format final data before send (data) => transformedData
  * @param {Function} config.validateData - Validate final data before send (data) => boolean|void (throw to abort)
  * @param {Function} config.onSend - Called right before request.send() with finalData
  * @param {Function} config.onResponse - Called with full response object from request.response
@@ -19,15 +21,17 @@ import {ApiClient} from '../client/ApiClient';
  * @param {Function} config.onDataChanged - Called when data changes (prevData, newData) => void
  * @param {Function} config.onReset - Called when reset() is invoked
  * @param {Function} config.onAbort - Called when abort() is invoked with (reason)
+ * @param {InterceptorManager} config.interceptors - Optional interceptor manager (for extensions)
  * @param {Object} config.* - Any other ApiClient request config (headers, timeout, recovery, etc.)
  *
  * @returns {Object} API state and methods
  */
-export function useBaseApi(config) {
+export function useBaseApi(config, interceptors = null) {
   const {
     client: providedClient,
     url,
     initialData = {},
+    filterData,
     validateData,
     onSend,
     onResponse,
@@ -54,6 +58,9 @@ export function useBaseApi(config) {
   // Track previous data for onDataChanged
   const prevDataRef = useRef(initialData);
 
+  // Use provided interceptors or create new one
+  const hooksRef = useRef(interceptors || new InterceptorManager());
+
   // Effect to trigger onDataChanged when data updates
   useEffect(() => {
     if (onDataChanged && prevDataRef.current !== data) {
@@ -61,6 +68,29 @@ export function useBaseApi(config) {
       prevDataRef.current = data;
     }
   }, [data, onDataChanged]);
+
+  // Lifecycle hooks: onMount and onUnmount
+  useEffect(() => {
+    (async () => {
+      await hooksRef.current.run('onMount', undefined, {
+        data,
+        response,
+        error,
+        isLoading,
+      });
+    })();
+
+    return () => {
+      (async () => {
+        await hooksRef.current.run('onUnmount', undefined, {
+          data,
+          response,
+          error,
+          isLoading,
+        });
+      })();
+    };
+  }, []); // Empty deps - run once on mount/unmount
 
   /**
    * Send request with optional data overrides
@@ -75,7 +105,15 @@ export function useBaseApi(config) {
     }
 
     // Merge current data with overrides
-    const finalData = {...data, ...overrides};
+    let finalData = {...data, ...overrides};
+
+    // Run beforeSend hooks (extensions can modify finalData)
+    finalData = await hooksRef.current.run('beforeSend', finalData, {data, overrides});
+
+    // Filter/transform data if provided
+    if (filterData) {
+      finalData = filterData(finalData);
+    }
 
     // Validate data before sending
     if (validateData) {
@@ -105,7 +143,7 @@ export function useBaseApi(config) {
         ...requestConfig,
         body: finalData, // Merge finalData into body
       });
-
+      
       // Store current request for abort access
       currentRequestRef.current = request;
 
@@ -127,6 +165,9 @@ export function useBaseApi(config) {
       // Call success callback with parsed data
       onSuccess?.(parsedData);
 
+      // Run afterSend hooks (extensions can react to response)
+      await hooksRef.current.run('afterSend', parsedData, {data: finalData, response: parsedData, fullResponse});
+
       return parsedData;
     } catch (err) {
       // Update state on error
@@ -135,6 +176,9 @@ export function useBaseApi(config) {
 
       // Call error callback
       onError?.(err);
+
+      // Run onError hooks
+      await hooksRef.current.run('onError', err, {data: finalData});
 
       throw err;
     }
@@ -175,25 +219,35 @@ export function useBaseApi(config) {
   /**
    * Reset to initial state
    */
-  const reset = () => {
+  const reset = async () => {
+    // Run beforeReset hooks
+    await hooksRef.current.run('beforeReset', undefined, {data, response, error});
+
     setData(initialData);
     setResponse(null);
     setError(null);
     setIsLoading(false);
     onReset?.();
+
+    // Run afterReset hooks
+    await hooksRef.current.run('afterReset', undefined, {});
   };
 
   /**
    * Abort the current request
    * @param {string} reason - Abort reason
    */
-  const abort = (reason = 'manual') => {
+  const abort = async (reason = 'manual') => {
     const request = currentRequestRef.current;
     if (request) {
       request.abort(reason);
       onAbort?.(reason);
+
+      // Run onAbort hooks
+      await hooksRef.current.run('onAbort', reason, {request});
     }
   };
+
 
   return {
     // State
@@ -204,7 +258,7 @@ export function useBaseApi(config) {
 
     // Data mutation methods
     updateData,
-    setData: replaceData, // Alias
+    setData: replaceData,
     handleDataChange, // Convenience for forms
 
     // Request methods
