@@ -329,6 +329,90 @@ const result = await client.get('/maybe-exists').send();
 
 ---
 
+## Error Recovery
+
+RecoveryInterceptor handles smart error recovery (e.g., token refresh, device registration) before retrying.
+
+### Auth Token Refresh
+
+```js path=null start=null
+const client = new ApiClient({
+  baseURL: 'https://api.example.com',
+  recovery: {
+    auth: {
+      // Trigger on 401 errors
+      shouldRetry: (error) => error.status === 401,
+      
+      // Refresh token and retry
+      handler: async (error, context) => {
+        const newToken = await refreshAuthToken();
+        // Update client headers for subsequent requests
+        context.client.config.headers.authorization = `Bearer ${newToken}`;
+      }
+    }
+  }
+});
+
+// First request gets 401, token refreshes, request retries automatically
+const data = await client.get('/protected').send();
+```
+
+### Multiple Handlers
+
+```js path=null start=null
+const client = new ApiClient({
+  recovery: {
+    auth: {
+      shouldRetry: (error) => error.status === 401,
+      handler: async () => await refreshToken()
+    },
+    device: {
+      shouldRetry: (error) => error.status === 403,
+      handler: async () => await registerDevice()
+    }
+  }
+});
+```
+
+### Handler Failure Behavior
+
+```js path=null start=null
+const client = new ApiClient({
+  recovery: {
+    auth: {
+      shouldRetry: (error) => error.status === 401,
+      handler: async () => await refreshToken(),
+      abortOnFailure: true  // Default: fail paused requests if handler fails
+    }
+  }
+});
+```
+
+### Disable Per-Request
+
+```js path=null start=null
+// Skip recovery for public endpoints
+await client.get('/public', {
+  recovery: {
+    auth: { enable: false }
+  }
+}).send();
+```
+
+### How It Works
+
+1. Request fails with error
+2. `shouldRetry` checks if this handler should run
+3. Pause concurrent requests for this client
+4. Run `handler` (e.g., refresh token)
+5. If handler succeeds → retry original request
+6. If handler fails → throw original error
+7. Resume paused requests
+
+**Prevents infinite loops:** Each request only attempts recovery once.
+
+---
+
 ## Custom Interceptors
 
 Interceptors let you hook into the request/response lifecycle.
@@ -574,12 +658,12 @@ Old hooks have been renamed for clarity:
 
 ## Testing
 
-All features are thoroughly tested with **337 passing tests** across:
+All features are thoroughly tested with **362 passing tests** across:
 
 - **ApiClient** (40 tests) — HTTP methods, config merging, interceptor registration
-- **ApiRequest** (30 tests) — Lifecycle, hooks, error handling
+- **ApiRequest** (32 tests) — Lifecycle, hooks, error handling, recovery
 - **InterceptorManager** (45 tests) — Hook management, priorities
-- **Built-in Interceptors** (60+ tests) — Logger, Cache, CancelKey, StatusHandler, etc.
+- **Built-in Interceptors** (80+ tests) — Logger, Cache, CancelKey, StatusHandler, Recovery, Retry, etc.
 - **Utilities** (19 tests) — Response parsing, request building
 
 ### Running Tests

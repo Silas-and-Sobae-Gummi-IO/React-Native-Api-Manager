@@ -77,9 +77,9 @@ client.interceptors.remove(hookName, name)
 12. `request:formatResponse` - Transform Response object (status handlers)
 13. `request:onResponse` - Observe response (non-transforming)
 14. `request:formatData` - Parse/transform data
-15. `request:formatError` - Transform errors
-16. `request:onError` - Observe errors (non-transforming)
-17. `request:suppressError` - Return true to suppress
+15. `request:formatError` - Transform errors OR return non-error value for recovery
+16. `request:onError` - Observe errors (non-transforming, skipped if recovered)
+17. `request:suppressError` - Return true to suppress (skipped if recovered)
 18. `request:complete` - Always runs (finally)
 
 **Hook Context:**
@@ -100,7 +100,7 @@ client.interceptors.remove(hookName, name)
 ## Built-in Interceptors
 
 **CoreInterceptor** (always attached):
-- Registers all built-ins: Logger, StatusHandler, CancelKey, Cache, Metrics, RateLimit, Retry
+- Registers all built-ins: Logger, StatusHandler, CancelKey, Cache, Metrics, RateLimit, Recovery, Retry
 - Sets `autoFixJson: true`, `Accept: application/json` defaults
 - Wires response parsing via `request:formatData`
 
@@ -121,6 +121,12 @@ client.interceptors.remove(hookName, name)
 - Caches GET with TTL, auto-invalidates on mutations
 - Config: `{ enable, ttl, invalidateOn }`
 - Boolean shorthand: `cache: true`
+
+**RecoveryInterceptor** (priority 40):
+- Handles error recovery with custom handlers (auth refresh, device registration, etc.)
+- Config: `{ handlerName: { enable, shouldRetry, handler, abortOnFailure } }`
+- Pauses concurrent requests while handler runs, retries original request on success
+- Hook: `request:formatError` (runs before RetryInterceptor)
 
 **RetryInterceptor** (priority 50):
 - Retries on status codes or network errors with backoff
@@ -182,10 +188,12 @@ class CustomInterceptor extends BaseInterceptor {
 **Error Handling:**
 - Throws ApiError with `{ message, status, config, response }`
 - `onStatus` handlers can return early or throw custom errors
+- `request:formatError` can return non-error value for recovery (skips onError/suppressError)
 - `request:suppressError` can prevent throwing
+- Abort errors (AbortError) are never recovered
 
 **Testing:**
-- 337 tests passing across all modules
+- 362 tests passing across all modules
 - Framework: Jest
 
 ---

@@ -53,9 +53,7 @@ export class ApiRequest {
     } catch (error) {
       const formatted = await this._runInterceptors('request:formatError', error);
       // If a formatter returned a non-error value, treat it as a recovered result
-      // Check for error-like objects (Error, DOMException, etc.)
-      const isErrorLike = formatted instanceof Error || (formatted && typeof formatted === 'object' && 'name' in formatted && 'message' in formatted);
-      if (!isErrorLike) {
+      if (!this._isErrorLike(formatted)) {
         result = formatted;
         return result;
       }
@@ -76,5 +74,14 @@ export class ApiRequest {
     // Pass merged config if available, otherwise fall back to request config
     const config = this._context.config || this._config;
     return this._client.interceptors.run(name, value, {client: this._client, config, context: this._context, ...additionalContext});
+  }
+
+  /**
+   * Check if value is an error or error-like object
+   * Error-like objects have both 'name' and 'message' properties (e.g., DOMException)
+   */
+  _isErrorLike(value) {
+    return value instanceof Error || 
+           (value && typeof value === 'object' && 'name' in value && 'message' in value);
   }
 }
