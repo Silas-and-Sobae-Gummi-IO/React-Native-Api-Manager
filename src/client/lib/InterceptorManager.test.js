@@ -6,13 +6,13 @@ import {BaseInterceptor} from '../interceptors/BaseInterceptor';
 // Mock interceptor classes for testing
 class MockInterceptor1 extends BaseInterceptor {
   register() {
-    this._manager.add('test:hook', 'mock1:action', () => 'mock1', 10);
+    this._manager.add('test:hook', () => 'mock1', 10, 'mock1:action');
   }
 }
 
 class MockInterceptor2 extends BaseInterceptor {
   register() {
-    this._manager.add('test:hook', 'mock2:action', () => 'mock2', 20);
+    this._manager.add('test:hook', () => 'mock2', 20, 'mock2:action');
   }
 }
 
@@ -44,7 +44,7 @@ describe('InterceptorManager', () => {
   describe('add() - Adding individual hooks', () => {
     it('adds a hook with default priority', () => {
       const callback = jest.fn();
-      manager.add('test:hook', 'my-hook', callback);
+      manager.add('test:hook', callback, 10, 'my-hook');
 
       const hooks = manager.hooks.get('test:hook');
       expect(hooks).toHaveLength(1);
@@ -58,16 +58,16 @@ describe('InterceptorManager', () => {
 
     it('adds a hook with custom priority', () => {
       const callback = jest.fn();
-      manager.add('test:hook', 'my-hook', callback, 5);
+      manager.add('test:hook', callback, 5, 'my-hook');
 
       const hooks = manager.hooks.get('test:hook');
       expect(hooks[0].priority).toBe(5);
     });
 
     it('sorts hooks by priority in ascending order', () => {
-      manager.add('test:hook', 'low', jest.fn(), 20);
-      manager.add('test:hook', 'high', jest.fn(), 5);
-      manager.add('test:hook', 'medium', jest.fn(), 10);
+      manager.add('test:hook', jest.fn(), 20, 'low');
+      manager.add('test:hook', jest.fn(), 5, 'high');
+      manager.add('test:hook', jest.fn(), 10, 'medium');
 
       const hooks = manager.hooks.get('test:hook');
       expect(hooks[0].name).toBe('high');
@@ -76,9 +76,9 @@ describe('InterceptorManager', () => {
     });
 
     it('preserves insertion order for hooks with same priority', () => {
-      manager.add('test:hook', 'first', jest.fn(), 10);
-      manager.add('test:hook', 'second', jest.fn(), 10);
-      manager.add('test:hook', 'third', jest.fn(), 10);
+      manager.add('test:hook', jest.fn(), 10, 'first');
+      manager.add('test:hook', jest.fn(), 10, 'second');
+      manager.add('test:hook', jest.fn(), 10, 'third');
 
       const hooks = manager.hooks.get('test:hook');
       expect(hooks[0].name).toBe('first');
@@ -87,8 +87,8 @@ describe('InterceptorManager', () => {
     });
 
     it('allows multiple hooks on the same hookName', () => {
-      manager.add('test:hook', 'hook1', jest.fn());
-      manager.add('test:hook', 'hook2', jest.fn());
+      manager.add('test:hook', jest.fn(), 10, 'hook1');
+      manager.add('test:hook', jest.fn(), 10, 'hook2');
 
       const hooks = manager.hooks.get('test:hook');
       expect(hooks).toHaveLength(2);
@@ -97,8 +97,8 @@ describe('InterceptorManager', () => {
 
   describe('remove() - Removing individual hooks', () => {
     it('removes a hook by name', () => {
-      manager.add('test:hook', 'hook1', jest.fn());
-      manager.add('test:hook', 'hook2', jest.fn());
+      manager.add('test:hook', jest.fn(), 10, 'hook1');
+      manager.add('test:hook', jest.fn(), 10, 'hook2');
 
       manager.remove('test:hook', 'hook1');
 
@@ -108,7 +108,7 @@ describe('InterceptorManager', () => {
     });
 
     it('handles removal of non-existent hook gracefully', () => {
-      manager.add('test:hook', 'hook1', jest.fn());
+      manager.add('test:hook', jest.fn(), 10, 'hook1');
 
       expect(() => {
         manager.remove('test:hook', 'non-existent');
@@ -156,7 +156,7 @@ describe('InterceptorManager', () => {
     });
 
     it('sets _provider to null for manually added hooks', () => {
-      manager.add('custom:hook', 'manual-hook', jest.fn());
+      manager.add('custom:hook', jest.fn(), 10, 'manual-hook');
 
       const hooks = manager.hooks.get('custom:hook');
       expect(hooks[0]._provider).toBeNull();
@@ -247,7 +247,7 @@ describe('InterceptorManager', () => {
 
     it('removes only hooks owned by the provider, not manually added hooks', () => {
       manager.attach(MockInterceptor1); // Adds hook with _provider='MockInterceptor1'
-      manager.add('test:hook', 'custom:action', jest.fn()); // Adds hook with _provider=null
+      manager.add('test:hook', jest.fn(), 10, 'custom:action'); // Adds hook with _provider=null
 
       manager.detach('MockInterceptor1');
 
@@ -267,8 +267,8 @@ describe('InterceptorManager', () => {
       class MultiHookInterceptor extends BaseInterceptor {
         static name = 'multi';
         register() {
-          this._manager.add('hook1', 'multi:action1', jest.fn());
-          this._manager.add('hook2', 'multi:action2', jest.fn());
+          this._manager.add('hook1', jest.fn(), 10, 'multi:action1');
+          this._manager.add('hook2', jest.fn(), 10, 'multi:action2');
         }
       }
 
@@ -285,9 +285,9 @@ describe('InterceptorManager', () => {
   describe('run() - Executing hook chains', () => {
     it('executes hooks in priority order', async () => {
       const execution = [];
-      manager.add('test:hook', 'first', () => execution.push(1), 5);
-      manager.add('test:hook', 'second', () => execution.push(2), 10);
-      manager.add('test:hook', 'third', () => execution.push(3), 15);
+      manager.add('test:hook', () => execution.push(1), 5, 'first');
+      manager.add('test:hook', () => execution.push(2), 10, 'second');
+      manager.add('test:hook', () => execution.push(3), 15, 'third');
 
       await manager.run('test:hook');
 
@@ -295,8 +295,8 @@ describe('InterceptorManager', () => {
     });
 
     it('passes initial value through hook chain', async () => {
-      manager.add('test:hook', 'hook1', (val) => val + 1);
-      manager.add('test:hook', 'hook2', (val) => val * 2);
+      manager.add('test:hook', (val) => val + 1, 10, 'hook1');
+      manager.add('test:hook', (val) => val * 2, 10, 'hook2');
 
       const result = await manager.run('test:hook', 5);
 
@@ -305,7 +305,7 @@ describe('InterceptorManager', () => {
 
     it('passes context to hooks when value is undefined', async () => {
       const mockCallback = jest.fn((ctx) => ctx.foo);
-      manager.add('test:hook', 'hook1', mockCallback);
+      manager.add('test:hook', mockCallback, 10, 'hook1');
 
       await manager.run('test:hook', undefined, {foo: 'bar'});
 
@@ -314,7 +314,7 @@ describe('InterceptorManager', () => {
 
     it('passes both value and context when value is defined', async () => {
       const mockCallback = jest.fn((val, ctx) => val + ctx.increment);
-      manager.add('test:hook', 'hook1', mockCallback);
+      manager.add('test:hook', mockCallback, 10, 'hook1');
 
       const result = await manager.run('test:hook', 10, {increment: 5});
 
@@ -323,8 +323,8 @@ describe('InterceptorManager', () => {
     });
 
     it('skips hook if callback returns undefined', async () => {
-      manager.add('test:hook', 'hook1', () => undefined);
-      manager.add('test:hook', 'hook2', (val) => val + 10);
+      manager.add('test:hook', () => undefined, 10, 'hook1');
+      manager.add('test:hook', (val) => val + 10, 10, 'hook2');
 
       const result = await manager.run('test:hook', 5);
 
@@ -332,10 +332,15 @@ describe('InterceptorManager', () => {
     });
 
     it('handles async hook callbacks', async () => {
-      manager.add('test:hook', 'async', async (val) => {
-        await new Promise((resolve) => setTimeout(resolve, 10));
-        return val + 1;
-      });
+      manager.add(
+        'test:hook',
+        async (val) => {
+          await new Promise((resolve) => setTimeout(resolve, 10));
+          return val + 1;
+        },
+        10,
+        'async'
+      );
 
       const result = await manager.run('test:hook', 5);
 
@@ -421,13 +426,13 @@ describe('InterceptorManager', () => {
     it('manages complex hook chains with multiple providers', async () => {
       class Interceptor1 extends BaseInterceptor {
         register() {
-          this._manager.add('request:prepare', 'i1:prepare', (val) => val + 1, 5);
+          this._manager.add('request:prepare', (val) => val + 1, 5, 'i1:prepare');
         }
       }
 
       class Interceptor2 extends BaseInterceptor {
         register() {
-          this._manager.add('request:prepare', 'i2:prepare', (val) => val * 2, 10);
+          this._manager.add('request:prepare', (val) => val * 2, 10, 'i2:prepare');
         }
       }
 
@@ -442,19 +447,19 @@ describe('InterceptorManager', () => {
     it('properly interleaves manual hooks with provider hooks by priority', async () => {
       class Interceptor1 extends BaseInterceptor {
         register() {
-          this._manager.add('request:prepare', 'i1:prepare', (val) => val + 1, 5);
+          this._manager.add('request:prepare', (val) => val + 1, 5, 'i1:prepare');
         }
       }
 
       class Interceptor2 extends BaseInterceptor {
         register() {
-          this._manager.add('request:prepare', 'i2:prepare', (val) => val * 2, 10);
+          this._manager.add('request:prepare', (val) => val * 2, 10, 'i2:prepare');
         }
       }
 
       manager.attach(Interceptor1);
       manager.attach(Interceptor2);
-      manager.add('request:prepare', 'on-the-fly', (val) => val + 5, 8);
+      manager.add('request:prepare', (val) => val + 5, 8, 'on-the-fly');
 
       const result = await manager.run('request:prepare', 5);
 
@@ -473,8 +478,8 @@ describe('InterceptorManager', () => {
     });
 
     it('maintains hook isolation across different hookNames', async () => {
-      manager.add('hook1', 'action1', () => 'a');
-      manager.add('hook2', 'action2', () => 'b');
+      manager.add('hook1', () => 'a', 10, 'action1');
+      manager.add('hook2', () => 'b', 10, 'action2');
 
       const result1 = await manager.run('hook1');
       const result2 = await manager.run('hook2');
