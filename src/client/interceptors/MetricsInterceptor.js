@@ -23,14 +23,14 @@ export class MetricsInterceptor extends BaseInterceptor {
     enable: false,
     onMetrics: null,
   };
-  
+
   configKey = 'metrics';
 
   register() {
     this._useShorthandConfig();
-    
-    this._manager.add('request:beforeRequest', 'metrics:start', this._onStart.bind(this), 100);
-    this._manager.add('request:complete', 'metrics:end', this._onComplete.bind(this), 100);
+
+    this._manager.add('request:beforeRequest', this._onStart.bind(this), 100, 'metrics:start');
+    this._manager.add('request:complete', this._onComplete.bind(this), 100, 'metrics:end');
   }
 
   _shouldTrack(config) {

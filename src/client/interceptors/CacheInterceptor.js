@@ -41,12 +41,12 @@ export class CacheInterceptor extends BaseInterceptor {
   register() {
     this._useShorthandConfig();
     
-    this._manager.add('request:beforeRequest', 'cache:invalidate', this._invalidateCache.bind(this), 40);
-    this._manager.add('request:beforeRequest', 'cache:check', this._checkCache.bind(this), 50);
+    this._manager.add('request:beforeRequest', this._invalidateCache.bind(this), 40, 'cache:invalidate');
+    this._manager.add('request:beforeRequest', this._checkCache.bind(this), 50, 'cache:check');
     // Skip fetch and return cached data if available
-    this._manager.add('request:skipFetch', 'cache:return', this._returnCached.bind(this), 10);
+    this._manager.add('request:skipFetch', this._returnCached.bind(this), 10, 'cache:return');
     // Store parsed data after core parser
-    this._manager.add('request:formatData', 'cache:store', this._storeCache.bind(this), 999);
+    this._manager.add('request:formatData', this._storeCache.bind(this), 999, 'cache:store');
   }
 
   _returnCached(skipValue, hookContext) {

@@ -11,7 +11,7 @@ export class StatusHandlerInterceptor extends BaseInterceptor {
 
   register() {
     // Run before parseResponse (priority 5, parseResponse is at 10)
-    this._manager.add('request:formatData', 'statusHandler:check', this._checkStatus.bind(this), 5);
+    this._manager.add('request:formatData', this._checkStatus.bind(this), 5, 'statusHandler:check');
   }
 
   async _checkStatus(response, context) {

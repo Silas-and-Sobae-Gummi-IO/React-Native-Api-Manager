@@ -6,7 +6,7 @@
 export class BaseInterceptor {
   static name = 'base';
   static defaultConfig = null;
-  
+
   // Child classes should set this explicitly
   configKey = null;
 
@@ -30,10 +30,10 @@ export class BaseInterceptor {
   _useShorthandConfig() {
     const key = this.configKey || this.constructor.name.replace('Interceptor', '').toLowerCase();
     const name = this.constructor.name.toLowerCase().replace('interceptor', '');
-    
-    this._manager.add('request:defaultConfig', `${name}:defaults`, (config) => ({...config, [key]: this._getDefaultConfig()}), 10);
-    this._manager.add('request:clientConfig', `${name}:normalizeClient`, (config) => this._normalizeConfig(config, key), 10);
-    this._manager.add('request:requestConfig', `${name}:normalizeRequest`, (config) => this._normalizeConfig(config, key), 10);
+
+    this._manager.add('request:defaultConfig', (config) => ({...config, [key]: this._getDefaultConfig()}), 10, `${name}:defaults`);
+    this._manager.add('request:clientConfig', (config) => this._normalizeConfig(config, key), 10, `${name}:normalizeClient`);
+    this._manager.add('request:requestConfig', (config) => this._normalizeConfig(config, key), 10, `${name}:normalizeRequest`);
   }
 
   /**
@@ -51,24 +51,24 @@ export class BaseInterceptor {
   _normalizeConfig(config, key) {
     const value = config[key];
     const defaults = this._getDefaultConfig();
-    
+
     // Not present - skip (defaults already added by defaultConfig hook)
     if (value === undefined) {
       return config;
     }
-    
+
     // Boolean shorthand: cache: true → cache: {enable: true, ...defaults}
     if (typeof value === 'boolean') {
       config[key] = {...defaults, enable: value};
       return config;
     }
-    
+
     // Object - merge with defaults
     if (typeof value === 'object' && value !== null) {
       config[key] = {...defaults, ...value};
       return config;
     }
-    
+
     return config;
   }
 }

@@ -59,24 +59,24 @@ describe('ApiRequest', () => {
       class TrackingInterceptor extends BaseInterceptor {
         static name = 'tracking';
         register() {
-          this._manager.add('request:init', 'track:init', () => {
+          this._manager.add('request:init', () => {
             executionOrder.push('init');
           });
-          this._manager.add('request:beforeRequest', 'track:before', () => {
+          this._manager.add('request:beforeRequest', () => {
             executionOrder.push('beforeRequest');
           });
-          this._manager.add('request:formatResponse', 'track:format', (res) => {
+          this._manager.add('request:formatResponse', (res) => {
             executionOrder.push('formatResponse');
             return res;
           });
-          this._manager.add('request:onResponse', 'track:onRes', () => {
+          this._manager.add('request:onResponse', () => {
             executionOrder.push('onResponse');
           });
-          this._manager.add('request:formatData', 'track:data', (res) => {
+          this._manager.add('request:formatData', (res) => {
             executionOrder.push('formatData');
             return res;
           });
-          this._manager.add('request:complete', 'track:complete', () => {
+          this._manager.add('request:complete', () => {
             executionOrder.push('complete');
           });
         }
@@ -89,21 +89,14 @@ describe('ApiRequest', () => {
 
       await request.send();
 
-      expect(executionOrder).toEqual([
-        'init',
-        'beforeRequest',
-        'formatResponse',
-        'onResponse',
-        'formatData',
-        'complete',
-      ]);
+      expect(executionOrder).toEqual(['init', 'beforeRequest', 'formatResponse', 'onResponse', 'formatData', 'complete']);
     });
 
     it('context persists across multiple send() calls', async () => {
       class ContextInterceptor extends BaseInterceptor {
         static name = 'context';
         register() {
-          this._manager.add('request:init', 'ctx', (hookContext) => {
+          this._manager.add('request:init', (hookContext) => {
             const {context} = hookContext;
             context.callCount = (context.callCount || 0) + 1;
           });
@@ -131,10 +124,14 @@ describe('ApiRequest', () => {
       class CaptureInterceptor extends BaseInterceptor {
         static name = 'capture';
         register() {
-          this._manager.add('request:beforeRequest', 'cap', (ctx) => {
-            // beforeRequest receives undefined as value, so first param is context
-            capturedContext = ctx;
-          }, 10);
+          this._manager.add(
+            'request:beforeRequest',
+            (ctx) => {
+              // beforeRequest receives undefined as value, so first param is context
+              capturedContext = ctx;
+            },
+            10
+          );
         }
       }
 
@@ -254,7 +251,7 @@ describe('ApiRequest', () => {
       class DefaultsInterceptor extends BaseInterceptor {
         static name = 'defaults';
         register() {
-          this._manager.add('request:defaultConfig', 'def', (config) => {
+          this._manager.add('request:defaultConfig', (config) => {
             return {
               ...config,
               timeout: 5000,
@@ -284,7 +281,7 @@ describe('ApiRequest', () => {
       class ErrorInterceptor extends BaseInterceptor {
         static name = 'error';
         register() {
-          this._manager.add('request:formatError', 'fmt', (error) => {
+          this._manager.add('request:formatError', (error) => {
             formattedError = error;
             error.formatted = true;
             return error;
@@ -314,11 +311,11 @@ describe('ApiRequest', () => {
       class ErrorTrackingInterceptor extends BaseInterceptor {
         static name = 'errorTrack';
         register() {
-          this._manager.add('request:formatError', 'fmt', (error) => {
+          this._manager.add('request:formatError', (error) => {
             executionOrder.push('formatError');
             return error;
           });
-          this._manager.add('request:onError', 'onErr', () => {
+          this._manager.add('request:onError', () => {
             executionOrder.push('onError');
           });
         }
@@ -344,7 +341,7 @@ describe('ApiRequest', () => {
       class SuppressInterceptor extends BaseInterceptor {
         static name = 'suppress';
         register() {
-          this._manager.add('request:suppressError', 'sup', () => true);
+          this._manager.add('request:suppressError', () => true);
         }
       }
 
@@ -364,7 +361,7 @@ describe('ApiRequest', () => {
       class NoSuppressInterceptor extends BaseInterceptor {
         static name = 'noSuppress';
         register() {
-          this._manager.add('request:suppressError', 'noSup', () => false);
+          this._manager.add('request:suppressError', () => false);
         }
       }
 
@@ -383,7 +380,7 @@ describe('ApiRequest', () => {
       class ContextCaptureInterceptor extends BaseInterceptor {
         static name = 'ctxCap';
         register() {
-          this._manager.add('request:suppressError', 'cap', (val, ctx) => {
+          this._manager.add('request:suppressError', (val, ctx) => {
             capturedContext = ctx;
             return true;
           });
@@ -407,7 +404,7 @@ describe('ApiRequest', () => {
       class TestRecoveryInterceptor extends BaseInterceptor {
         static name = 'testRecovery';
         register() {
-          this._manager.add('request:formatError', 'recover', () => {
+          this._manager.add('request:formatError', () => {
             // Return successful result instead of error
             return {data: 'recovered'};
           });
@@ -430,7 +427,7 @@ describe('ApiRequest', () => {
       class TransformInterceptor extends BaseInterceptor {
         static name = 'transform';
         register() {
-          this._manager.add('request:formatError', 'transform', () => {
+          this._manager.add('request:formatError', () => {
             // Return error-like object (has name and message)
             return {name: 'CustomError', message: 'Transformed error', code: 500};
           });
@@ -456,8 +453,8 @@ describe('ApiRequest', () => {
       class RecoveryWithCompleteInterceptor extends BaseInterceptor {
         static name = 'recoveryComplete';
         register() {
-          this._manager.add('request:formatError', 'recover', () => ({data: 'ok'}));
-          this._manager.add('request:complete', 'complete', () => {
+          this._manager.add('request:formatError', () => ({data: 'ok'}));
+          this._manager.add('request:complete', () => {
             completed = true;
           });
         }
@@ -481,7 +478,7 @@ describe('ApiRequest', () => {
       class CompleteInterceptor extends BaseInterceptor {
         static name = 'complete';
         register() {
-          this._manager.add('request:complete', 'comp', () => {
+          this._manager.add('request:complete', () => {
             completed = true;
           });
         }
@@ -505,7 +502,7 @@ describe('ApiRequest', () => {
       class CompleteInterceptor extends BaseInterceptor {
         static name = 'complete';
         register() {
-          this._manager.add('request:complete', 'comp', () => {
+          this._manager.add('request:complete', () => {
             completed = true;
           });
         }
@@ -533,8 +530,8 @@ describe('ApiRequest', () => {
       class CompleteAndSuppressInterceptor extends BaseInterceptor {
         static name = 'both';
         register() {
-          this._manager.add('request:suppressError', 'sup', () => true);
-          this._manager.add('request:complete', 'comp', () => {
+          this._manager.add('request:suppressError', () => true);
+          this._manager.add('request:complete', () => {
             completed = true;
           });
         }
@@ -592,11 +589,7 @@ describe('ApiRequest', () => {
 
       await request.send();
 
-      expect(runSpy).toHaveBeenCalledWith(
-        'request:init',
-        undefined,
-        expect.any(Object)
-      );
+      expect(runSpy).toHaveBeenCalledWith('request:init', undefined, expect.any(Object));
     });
 
     it('passes context to interceptor manager', async () => {
@@ -605,10 +598,14 @@ describe('ApiRequest', () => {
       class ContextInterceptor extends BaseInterceptor {
         static name = 'ctx';
         register() {
-          this._manager.add('request:beforeRequest', 'cap', (ctx) => {
-            // beforeRequest receives undefined as value, so first param is context
-            capturedContext = ctx;
-          }, 10);
+          this._manager.add(
+            'request:beforeRequest',
+            (ctx) => {
+              // beforeRequest receives undefined as value, so first param is context
+              capturedContext = ctx;
+            },
+            10
+          );
         }
       }
 
@@ -632,10 +629,14 @@ describe('ApiRequest', () => {
       class MergeInterceptor extends BaseInterceptor {
         static name = 'merge';
         register() {
-          this._manager.add('request:beforeRequest', 'merge', (ctx) => {
-            // beforeRequest receives undefined as value, so first param is context
-            capturedContext = ctx;
-          }, 10);
+          this._manager.add(
+            'request:beforeRequest',
+            (ctx) => {
+              // beforeRequest receives undefined as value, so first param is context
+              capturedContext = ctx;
+            },
+            10
+          );
         }
       }
 
@@ -662,10 +663,10 @@ describe('ApiRequest', () => {
       class Logger1 extends BaseInterceptor {
         static name = 'logger1';
         register() {
-          this._manager.add('request:beforeRequest', 'log1', () => {
+          this._manager.add('request:beforeRequest', () => {
             logs.push('logger1:before');
           });
-          this._manager.add('request:onResponse', 'log1:res', () => {
+          this._manager.add('request:onResponse', () => {
             logs.push('logger1:response');
           });
         }
@@ -674,10 +675,10 @@ describe('ApiRequest', () => {
       class Logger2 extends BaseInterceptor {
         static name = 'logger2';
         register() {
-          this._manager.add('request:beforeRequest', 'log2', () => {
+          this._manager.add('request:beforeRequest', () => {
             logs.push('logger2:before');
           });
-          this._manager.add('request:onResponse', 'log2:res', () => {
+          this._manager.add('request:onResponse', () => {
             logs.push('logger2:response');
           });
         }

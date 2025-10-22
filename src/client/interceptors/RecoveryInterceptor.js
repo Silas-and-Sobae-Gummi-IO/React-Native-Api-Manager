@@ -43,13 +43,13 @@ export class RecoveryInterceptor extends BaseInterceptor {
 
   register() {
     // Store request reference in context (we need it later for retry)
-    this._manager.add('request:init', 'recovery:storeRequest', this._storeRequest.bind(this), 1);
+    this._manager.add('request:init', this._storeRequest.bind(this), 1, 'recovery:storeRequest');
     
     // Handle errors and attempt recovery
-    this._manager.add('request:formatError', 'recovery:handle', this._handleError.bind(this), 40);
+    this._manager.add('request:formatError', this._handleError.bind(this), 40, 'recovery:handle');
     
     // Check if recovery is in progress before request
-    this._manager.add('request:beforeRequest', 'recovery:checkPause', this._checkPause.bind(this), 40);
+    this._manager.add('request:beforeRequest', this._checkPause.bind(this), 40, 'recovery:checkPause');
   }
 
   /**

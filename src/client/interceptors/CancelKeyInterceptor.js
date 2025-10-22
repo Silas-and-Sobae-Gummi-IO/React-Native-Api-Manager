@@ -23,13 +23,13 @@ export class CancelKeyInterceptor extends BaseInterceptor {
 
   register() {
     // Set default config for JSON APIs
-    this._manager.add('request:defaultConfig', 'core:defaults', this._setDefaults.bind(this), 10);
+    this._manager.add('request:defaultConfig', this._setDefaults.bind(this), 10, 'cancelKey:defaults');
 
     // Hook early to capture and cancel previous requests before config processing
-    this._manager.add('request:init', 'cancelKey:setup', this._onSetup.bind(this), 1);
+    this._manager.add('request:init', this._onSetup.bind(this), 1, 'cancelKey:setup');
 
     // Hook late to clean up completed requests
-    this._manager.add('request:complete', 'cancelKey:cleanup', this._onCleanup.bind(this), 999);
+    this._manager.add('request:complete', this._onCleanup.bind(this), 999, 'cancelKey:cleanup');
   }
 
   _setDefaults(config) {

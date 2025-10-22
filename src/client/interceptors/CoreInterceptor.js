@@ -33,10 +33,10 @@ export class CoreInterceptor extends BaseInterceptor {
     this._manager.attach(RetryInterceptor); // Priority 50
 
     // Set default headers for JSON APIs
-    this._manager.add('request:defaultConfig', 'core:defaults', this._setDefaults.bind(this), 5);
+    this._manager.add('request:defaultConfig', this._setDefaults.bind(this), 5, 'core:defaults');
 
     // Wire up response parsing
-    this._manager.add('request:formatData', 'core:parseResponse', this._parseResponse.bind(this), 10);
+    this._manager.add('request:formatData', this._parseResponse.bind(this), 10, 'core:parseResponse');
   }
 
   _setDefaults(config) {

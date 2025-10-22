@@ -40,7 +40,7 @@ export class RateLimitInterceptor extends BaseInterceptor {
   register() {
     // Use standardized shorthand normalization hooks
     this._useShorthandConfig();
-    this._manager.add('request:beforeRequest', 'rateLimit:check', this._checkRateLimit.bind(this), 30);
+    this._manager.add('request:beforeRequest', this._checkRateLimit.bind(this), 30, 'rateLimit:check');
   }
 
   // Kept for backward-compatibility in tests; mirrors Base default behavior

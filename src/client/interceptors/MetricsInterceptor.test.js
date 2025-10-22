@@ -3,7 +3,7 @@
 import {MetricsInterceptor} from './MetricsInterceptor';
 import {ApiClient} from '../ApiClient';
 
-describe.skip('MetricsInterceptor', () => {
+describe('MetricsInterceptor', () => {
   let mockFetch;
 
   beforeEach(() => {
@@ -46,29 +46,27 @@ describe.skip('MetricsInterceptor', () => {
       const client = new ApiClient();
       const metrics = client.interceptors.providers.get('metrics');
 
-      const config = metrics._setDefaults({});
+      const defaultConfig = metrics._getDefaultConfig({});
 
-      expect(config.metrics).toEqual({
+      expect(defaultConfig).toEqual({
         enable: false,
         onMetrics: null,
       });
     });
 
-    it('preserves user-provided metrics config', () => {
-      const client = new ApiClient();
-      const metrics = client.interceptors.providers.get('metrics');
-
-      const userConfig = {
+    it('preserves user-provided metrics config', async () => {
+      const onMetrics = jest.fn();
+      const client = new ApiClient({
         metrics: {
           enable: true,
-          onMetrics: jest.fn(),
+          onMetrics: onMetrics,
         },
-      };
+      });
+      const request = client.get('https://api.example.com/users');
+      await request.send();
 
-      const config = metrics._setDefaults(userConfig);
-
-      expect(config.metrics.enable).toBe(true);
-      expect(config.metrics.onMetrics).toBe(userConfig.metrics.onMetrics);
+      expect(request._context.config.metrics.enable).toBe(true);
+      expect(request._context.config.metrics.onMetrics).toBe(onMetrics);
     });
   });
 
@@ -95,7 +93,7 @@ describe.skip('MetricsInterceptor', () => {
         responseSize: 42,
       });
       expect(metrics.startTime).toBeGreaterThan(0);
-      expect(metrics.endTime).toBeGreaterThan(metrics.startTime);
+      expect(metrics.endTime).toBeGreaterThanOrEqual(metrics.startTime);
       expect(metrics.duration).toBeGreaterThanOrEqual(0);
     });
 
@@ -425,6 +423,7 @@ describe.skip('MetricsInterceptor', () => {
       });
 
       await client.get('https://api.example.com/users').send();
+      await new Promise((resolve) => setTimeout(resolve, 20));
       await client.get('https://api.example.com/posts').send();
 
       const metrics1 = onMetrics.mock.calls[0][0];

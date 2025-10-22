@@ -26,6 +26,31 @@ describe('ApiClient', () => {
   });
 
   describe('Initialization', () => {
+    it('ensures each client has isolated interceptor managers', () => {
+      const client1 = new ApiClient();
+      const client2 = new ApiClient();
+
+      // Managers should be different instances
+      expect(client1.interceptors).not.toBe(client2.interceptors);
+
+      // Add a custom hook only to client1
+      const customCallback = jest.fn((config) => ({...config, customFlag: true}));
+      client1.interceptors.add('request:defaultConfig', customCallback, 50, 'custom:test-hook');
+
+      // Client1 should have the custom hook
+      const client1Hooks = client1.interceptors.hooks.get('request:defaultConfig');
+      const hasCustomHook = client1Hooks.some((h) => h.name === 'custom:test-hook');
+      expect(hasCustomHook).toBe(true);
+
+      // Client2 should NOT have the custom hook
+      const client2Hooks = client2.interceptors.hooks.get('request:defaultConfig');
+      const hasCustomHookInClient2 = client2Hooks.some((h) => h.name === 'custom:test-hook');
+      expect(hasCustomHookInClient2).toBe(false);
+
+      // Verify the hook counts are different
+      expect(client1Hooks.length).toBe(client2Hooks.length + 1);
+    });
+
     it('creates a client instance with default config', () => {
       const client = new ApiClient();
 
@@ -494,7 +519,7 @@ describe('ApiClient', () => {
 
       const promise = request.send();
       // Wait a tick to ensure fetch has been called and signal listener is attached
-      await new Promise(resolve => setImmediate(resolve));
+      await new Promise((resolve) => setImmediate(resolve));
       request.abort();
 
       await expect(promise).rejects.toThrow();
@@ -511,7 +536,6 @@ describe('ApiClient', () => {
       expect(fetchOptions.signal).toBeInstanceOf(AbortSignal);
     });
   });
-
 
   describe('Config Merging and Overrides', () => {
     it('merges client config with request config', async () => {

@@ -36,10 +36,15 @@ describe('CoreInterceptor', () => {
       const client = new ApiClient();
       let capturedConfig;
 
-      client.interceptors.add('request:defaultConfig', 'test:capture', (config) => {
-        capturedConfig = config;
-        return config;
-      }, 999);
+      client.interceptors.add(
+        'request:defaultConfig',
+        (config) => {
+          capturedConfig = config;
+          return config;
+        },
+        999,
+        'test:capture'
+      );
 
       const request = client.get('https://api.example.com/test');
       await request.send();
@@ -51,10 +56,15 @@ describe('CoreInterceptor', () => {
       const client = new ApiClient();
       let capturedConfig;
 
-      client.interceptors.add('request:defaultConfig', 'test:capture', (config) => {
-        capturedConfig = config;
-        return config;
-      }, 999);
+      client.interceptors.add(
+        'request:defaultConfig',
+        (config) => {
+          capturedConfig = config;
+          return config;
+        },
+        999,
+        'test:capture'
+      );
 
       const request = client.get('https://api.example.com/test');
       await request.send();

@@ -13,8 +13,8 @@ export class LoggerInterceptor extends BaseInterceptor {
   register() {
     this._useShorthandConfig();
     
-    this._manager.add('request:beforeRequest', 'logger:req', this._onBeforeRequest.bind(this), 999);
-    this._manager.add('request:onResponse', 'logger:res', this._onResponse.bind(this), 999);
+    this._manager.add('request:beforeRequest', this._onBeforeRequest.bind(this), 999, 'logger:req');
+    this._manager.add('request:onResponse', this._onResponse.bind(this), 999, 'logger:res');
   }
 
   _shouldLog(scope = null) {

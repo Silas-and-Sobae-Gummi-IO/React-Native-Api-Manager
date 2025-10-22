@@ -21,7 +21,7 @@ export class RetryInterceptor extends BaseInterceptor {
   register() {
     this._useShorthandConfig();
     // Wrap fetch execution to perform retries entirely within the interceptor
-    this._manager.add('request:performFetch', 'retry:wrap', this._wrapPerformFetch.bind(this), 50);
+    this._manager.add('request:performFetch', this._wrapPerformFetch.bind(this), 50, 'retry:wrap');
   }
 
   _wrapPerformFetch(performFetch, {url, options, config, context}) {

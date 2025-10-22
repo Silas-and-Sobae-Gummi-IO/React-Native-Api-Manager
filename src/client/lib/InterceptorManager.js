@@ -120,15 +120,11 @@ export class InterceptorManager {
     let out = value;
 
     for (const item of list) {
-      try {
-        const result = await (typeof out === 'undefined' ? item.callback(context) : item.callback(out, context));
+      // Dont put a try catch here as sometime this is expecting an error to be thrown by upstream
+      const result = await (typeof out === 'undefined' ? item.callback(context) : item.callback(out, context));
 
-        if (typeof result !== 'undefined') {
-          out = result;
-        }
-      } catch (error) {
-        console.error(`Error in hook "${item.name}" on "${hookName}":`, error);
-        // Continue with next hook
+      if (typeof result !== 'undefined') {
+        out = result;
       }
     }
 
@@ -221,7 +217,6 @@ export class InterceptorManager {
    * @private
    */
   _validateProvider(Provider, providerKey) {
-    console.log('DEBUG', Provider);
     if (typeof Provider !== 'function') {
       throw new Error(`Invalid provider: ${providerKey} must be a class`);
     }
@@ -236,12 +231,13 @@ export class InterceptorManager {
    * @private
    */
   _initializeProvider(Provider, providerKey) {
+    const previousProvider = this._currentProvider;
     this._currentProvider = providerKey;
 
     try {
       return new Provider().init(this, this.client);
     } finally {
-      this._currentProvider = null;
+      this._currentProvider = previousProvider;
     }
   }
 }
