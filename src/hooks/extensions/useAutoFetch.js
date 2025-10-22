@@ -24,60 +24,48 @@ export function useAutoFetch(interceptors, baseApi, config) {
   const {enabled = true, runOnMount = true, abortOnUnmount = false, condition, fetchData = {}, onAutoFetch} = config;
 
   // Register onMount hook to trigger send
-  useEffect(() => {
-    if (!enabled || !runOnMount) return;
+  interceptors.remove('onMount', 'autoFetch:onMount');
 
-    interceptors.add(
-      'onMount',
-      'autoFetch:onMount',
-      async (context) => {
-        // Check condition via interceptor (other extensions can override)
-        // Default: true if no condition, or condition(context) result if provided
-        const defaultShouldFetch = condition ? condition(context) : true;
-        const shouldAutoFetchOnMount = await interceptors.run('autoFetch:shouldFetch', defaultShouldFetch, {context, fetchData});
-        
-        if (!shouldAutoFetchOnMount) {
-          return;
-        }
+  interceptors.add(
+    'onMount',
+    'autoFetch:onMount',
+    async (context) => {
+      console.log('DEBUG', 'here');
+      if (!enabled || !runOnMount) return;
+      // Check condition via interceptor (other extensions can override)
+      // Default: true if no condition, or condition(context) result if provided
+      const defaultShouldFetch = condition ? condition(context) : true;
+      const shouldAutoFetchOnMount = await interceptors.run('autoFetch:shouldFetch', defaultShouldFetch, {context, fetchData});
+      console.log(defaultShouldFetch);
+      if (!shouldAutoFetchOnMount) {
+        return;
+      }
 
-        // Trigger autoFetch:beforeFetch hook (other extensions can react)
-        await interceptors.run('autoFetch:beforeFetch', undefined, {fetchData});
+      // Trigger autoFetch:beforeFetch hook (other extensions can react)
+      await interceptors.run('autoFetch:beforeFetch', undefined, {fetchData});
 
-        // Call onAutoFetch callback
-        onAutoFetch?.();
+      // Call onAutoFetch callback
+      onAutoFetch?.();
 
-        // Trigger send with optional data overrides
-        await baseApi.send(fetchData);
+      // Trigger send with optional data overrides
+      await baseApi.send(fetchData);
 
-        // Trigger autoFetch:afterFetch hook
-        await interceptors.run('autoFetch:afterFetch', undefined, {fetchData});
-      },
-      10
-    );
+      // Trigger autoFetch:afterFetch hook
+      await interceptors.run('autoFetch:afterFetch', undefined, {fetchData});
+    },
+    10
+  );
 
-    // Cleanup
-    return () => {
-      interceptors.remove('onMount', 'autoFetch:onMount');
-    };
-  }, [enabled, runOnMount]); // Re-register if enabled/runOnMount changes
-
-  // Register onUnmount hook to abort if configured
-  useEffect(() => {
-    if (!abortOnUnmount) return;
-
-    interceptors.add(
-      'onUnmount',
-      'autoFetch:onUnmount',
-      async () => {
-        baseApi.abort('unmount');
-      },
-      10
-    );
-
-    return () => {
-      interceptors.remove('onUnmount', 'autoFetch:onUnmount');
-    };
-  }, [abortOnUnmount]);
+  interceptors.remove('onUnmount', 'autoFetch:onUnmount');
+  interceptors.add(
+    'onUnmount',
+    'autoFetch:onUnmount',
+    async () => {
+      if (!abortOnUnmount) return;
+      baseApi.abort('unmount');
+    },
+    10
+  );
 
   // No additional state or methods
   return {};

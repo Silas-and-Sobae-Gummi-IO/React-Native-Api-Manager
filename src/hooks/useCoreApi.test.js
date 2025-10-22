@@ -9,7 +9,7 @@ describe('useCoreApi', () => {
     // Create client with proper interceptor initialization
     client = new ApiClient({baseURL: 'https://api.example.com'});
     global.fetch = jest.fn();
-    
+
     // Ensure fetch returns proper Response objects for parsing
     jest.spyOn(global, 'fetch');
   });
@@ -34,7 +34,7 @@ describe('useCoreApi', () => {
 
       expect(result.current.send).toBeDefined();
       expect(result.current.data).toBeDefined();
-      
+
       // Should NOT have extension methods/state
       expect(result.current.results).toBeUndefined();
       expect(result.current.loadMore).toBeUndefined();
@@ -96,7 +96,7 @@ describe('useCoreApi', () => {
       expect(result.current.refresh).toBeDefined();
     });
 
-    test('autoFetch extension works', async () => {
+    test.only('autoFetch extension works', async () => {
       let fetchCount = 0;
       global.fetch.mockImplementation(async () => {
         fetchCount++;

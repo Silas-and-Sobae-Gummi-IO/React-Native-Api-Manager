@@ -2,10 +2,10 @@ import {useState, useRef, useEffect} from 'react';
 
 /**
  * usePagination - Self-contained extension for pagination/infinite scroll
- * 
+ *
  * Manages its own state and registers interceptors with the base API.
  * Returns empty object if config is null/undefined.
- * 
+ *
  * @param {Object} interceptors - InterceptorManager instance from base API
  * @param {Object} baseApi - Base API object (for accessing send, data, etc)
  * @param {Object|null} config - Pagination config (null to disable)
@@ -33,14 +33,14 @@ export function usePagination(interceptors, baseApi, config) {
   // Use baseApi.result for accumulated results
   // Keep local state as fallback for non-persist usage
   const results = baseApi.result || [];
-  
+
   // Ensure result is initialized as empty array if null
   useEffect(() => {
     if (baseApi.result === null) {
       baseApi.updateResult([]);
     }
   }, []);
-  
+
   const [hasMore, setHasMore] = useState(true);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
 
@@ -97,36 +97,51 @@ export function usePagination(interceptors, baseApi, config) {
   // Register interceptors for pagination lifecycle
   useEffect(() => {
     // After send: accumulate results
-    interceptors.add('afterSend', 'pagination:afterSend', (parsedData, context) => {
-      // Store last response for cursor pagination
-      lastResponseRef.current = parsedData;
+    interceptors.add(
+      'afterSend',
+      'pagination:afterSend',
+      (parsedData, context) => {
+        // Store last response for cursor pagination
+        lastResponseRef.current = parsedData;
 
-      // Extract new results
-      const newResults = extractResults(parsedData);
+        // Extract new results
+        const newResults = extractResults(parsedData);
 
-      // Decide whether to replace or append
-      const replace = shouldReplace({results, response: parsedData, context});
+        // Decide whether to replace or append
+        const replace = shouldReplace({results, response: parsedData, context});
 
-      if (replace) {
-        baseApi.updateResult(newResults);
-      } else {
-        baseApi.updateResult([...results, ...newResults]);
-      }
+        if (replace) {
+          baseApi.updateResult(newResults);
+        } else {
+          baseApi.updateResult([...(results || []), ...newResults]);
+        }
 
-      // Update hasMore status
-      const moreAvailable = hasMoreFn(parsedData);
-      setHasMore(moreAvailable);
-    }, 10);
+        // Update hasMore status
+        const moreAvailable = hasMoreFn(parsedData);
+        setHasMore(moreAvailable);
+      },
+      10
+    );
 
     // Before reset: clear pagination state
-    interceptors.add('beforeReset', 'pagination:beforeReset', () => {
-      resetPagination();
-    }, 10);
+    interceptors.add(
+      'beforeReset',
+      'pagination:beforeReset',
+      () => {
+        resetPagination();
+      },
+      10
+    );
 
     // Before refresh: reset pagination (back to page 1)
-    interceptors.add('refresh:beforeSend', 'pagination:resetOnRefresh', () => {
-      resetPagination();
-    }, 10);
+    interceptors.add(
+      'refresh:beforeSend',
+      'pagination:resetOnRefresh',
+      () => {
+        resetPagination();
+      },
+      10
+    );
 
     // Cleanup on unmount
     return () => {

@@ -72,6 +72,7 @@ export function useBaseApi(config, interceptors) {
 
   // Lifecycle hooks: onMount and onUnmount
   useEffect(() => {
+    console.log('asdf', interceptors);
     (async () => {
       await interceptors.run('onMount', undefined, {
         data,
@@ -144,7 +145,7 @@ export function useBaseApi(config, interceptors) {
         ...requestConfig,
         body: finalData, // Merge finalData into body
       });
-      
+
       // Store current request for abort access
       currentRequestRef.current = request;
 
@@ -273,7 +274,6 @@ export function useBaseApi(config, interceptors) {
       await interceptors.run('onAbort', reason, {request});
     }
   };
-
 
   return {
     // State
