@@ -16,6 +16,10 @@ export class InterceptorManager {
     this._nextAutoId = 0; // Counter for auto-generated hook names
   }
 
+  // ============================================================================
+  // Public API Methods
+  // ============================================================================
+
   /**
    * Add a hook (WordPress-style signature)
    * @param {string} hookName - The hook to attach to
@@ -25,26 +29,16 @@ export class InterceptorManager {
    * @returns {string} The hook name (generated or provided)
    */
   add(hookName, callback, priority = 10, name = null) {
-    // Validate callback
-    if (typeof callback !== 'function') {
-      throw new Error(`Callback must be a function for hook "${hookName}"`);
-    }
-
-    // Generate name if not provided
-    const hookId = name || this._generateHookName(callback);
-
-    // Validate name
-    if (typeof hookId !== 'string' || hookId === '') {
-      throw new Error(`Hook name must be a non-empty string for hook "${hookName}"`);
-    }
+    this._validateCallback(hookName, callback);
+    const hookId = this._resolveHookName(hookName, callback, name);
 
     const list = this.hooks.get(hookName) || [];
 
-    // Check for duplicate names
-    const existing = list.find((h) => h.name === hookId);
-    if (existing) {
+    // Replace existing hook with same name
+    const existingIndex = list.findIndex((h) => h.name === hookId);
+    if (existingIndex !== -1) {
       console.warn(`Hook "${hookId}" already exists on "${hookName}". Replacing it.`);
-      this.remove(hookName, hookId);
+      list.splice(existingIndex, 1);
     }
 
     list.push({
@@ -58,15 +52,6 @@ export class InterceptorManager {
     this.hooks.set(hookName, list);
 
     return hookId;
-  }
-
-  /**
-   * Generate a unique name for a hook
-   * @private
-   */
-  _generateHookName(callback) {
-    const baseName = callback.name || 'anonymous';
-    return `${baseName}_${this._nextAutoId++}`;
   }
 
   /**
@@ -88,38 +73,17 @@ export class InterceptorManager {
    * @param {string} name - optional explicit name
    */
   attach(Provider, name = undefined) {
-    if (typeof Provider !== 'function') {
-      throw new Error(`Invalid provider: ${name ?? '(unnamed)'} must be a class`);
-    }
+    const providerKey = this._resolveProviderName(Provider, name);
 
-    // Use explicit name, then static name property, then class name
-    const providerKey = name || Provider.name;
-    if (!providerKey || providerKey === '') {
-      throw new Error('Anonymous providers must be attached with an explicit name.');
-    }
-
-    // Validate that provider name doesn't start with shorthand prefixes
-    if (providerKey.startsWith('-') || providerKey.startsWith('+') || providerKey.startsWith('~')) {
-      throw new Error(`Provider name "${providerKey}" cannot start with shorthand prefix (-, +, ~)`);
-    }
-
+    // Return existing instance if already attached
     if (this.providers.has(providerKey)) {
       return this.providers.get(providerKey);
     }
 
-    if (!(Provider.prototype instanceof BaseInterceptor)) {
-      throw new Error(`Provider ${providerKey} must extend BaseInterceptor`);
-    }
+    this._validateProvider(Provider, providerKey);
 
-    // Set current provider context before init so hooks can be tracked
-    this._currentProvider = providerKey;
-
-    let instance;
-    try {
-      instance = new Provider().init(this, this.client);
-    } finally {
-      this._currentProvider = null; // Clear even if init throws
-    }
+    // Initialize provider with tracking context
+    const instance = this._initializeProvider(Provider, providerKey);
 
     this.providers.set(providerKey, instance);
     return instance;
@@ -191,6 +155,93 @@ export class InterceptorManager {
       else if (typeof item === 'function') {
         this.attach(item);
       }
+    }
+  }
+
+  // ============================================================================
+  // Private Helper Methods
+  // ============================================================================
+
+  /**
+   * Validate that callback is a function
+   * @private
+   */
+  _validateCallback(hookName, callback) {
+    if (typeof callback !== 'function') {
+      throw new Error(`Callback must be a function for hook "${hookName}"`);
+    }
+  }
+
+  /**
+   * Resolve hook name - validate explicit name or auto-generate
+   * @private
+   */
+  _resolveHookName(hookName, callback, name) {
+    // Explicit name provided - validate it
+    if (name !== null && name !== undefined) {
+      if (typeof name !== 'string' || name === '') {
+        throw new Error(`Hook name must be a non-empty string for hook "${hookName}"`);
+      }
+      return name;
+    }
+
+    // Auto-generate name
+    return this._generateHookName(callback);
+  }
+
+  /**
+   * Generate a unique name for a hook
+   * @private
+   */
+  _generateHookName(callback) {
+    const baseName = callback.name || 'anonymous';
+    return `${baseName}_${this._nextAutoId++}`;
+  }
+
+  /**
+   * Resolve provider name from class or explicit name
+   * @private
+   */
+  _resolveProviderName(Provider, name) {
+    const providerKey = name || Provider.name;
+
+    if (!providerKey || providerKey === '') {
+      throw new Error('Anonymous providers must be attached with an explicit name.');
+    }
+
+    if (providerKey.startsWith('-') || providerKey.startsWith('+') || providerKey.startsWith('~')) {
+      throw new Error(`Provider name "${providerKey}" cannot start with shorthand prefix (-, +, ~)`);
+    }
+
+    return providerKey;
+  }
+
+  /**
+   * Validate that provider is a valid class extending BaseInterceptor
+   * @private
+   */
+  _validateProvider(Provider, providerKey) {
+    console.log('DEBUG', Provider);
+    if (typeof Provider !== 'function') {
+      throw new Error(`Invalid provider: ${providerKey} must be a class`);
+    }
+
+    if (!(Provider.prototype instanceof BaseInterceptor)) {
+      throw new Error(`Provider ${providerKey} must extend BaseInterceptor`);
+    }
+  }
+
+  /**
+   * Initialize provider instance with tracking context
+   * @private
+   */
+  _initializeProvider(Provider, providerKey) {
+    this._currentProvider = providerKey;
+
+    try {
+      return new Provider().init(this, this.client);
+    } finally {
+      this._currentProvider = null;
     }
   }
 }

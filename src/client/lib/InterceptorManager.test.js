@@ -93,6 +93,99 @@ describe('InterceptorManager', () => {
       const hooks = manager.hooks.get('test:hook');
       expect(hooks).toHaveLength(2);
     });
+
+    describe('auto-generated names', () => {
+      it('auto-generates name when not provided', () => {
+        const callback = jest.fn();
+        const hookName = manager.add('test:hook', callback);
+
+        expect(hookName).toBeDefined();
+        expect(typeof hookName).toBe('string');
+
+        const hooks = manager.hooks.get('test:hook');
+        expect(hooks[0].name).toBe(hookName);
+      });
+
+      it('returns the provided name when explicitly given', () => {
+        const callback = jest.fn();
+        const hookName = manager.add('test:hook', callback, 10, 'custom-name');
+
+        expect(hookName).toBe('custom-name');
+      });
+
+      it('uses function name in auto-generated name', () => {
+        function myNamedFunction() {}
+        const hookName = manager.add('test:hook', myNamedFunction);
+
+        expect(hookName).toContain('myNamedFunction');
+      });
+
+      it('handles anonymous functions in auto-generated names', () => {
+        const hookName = manager.add('test:hook', () => {});
+
+        expect(hookName).toContain('anonymous');
+      });
+
+      it('generates unique names for multiple hooks with same callback name', () => {
+        function myFunc() {}
+        const name1 = manager.add('test:hook', myFunc);
+        const name2 = manager.add('test:hook', myFunc);
+
+        expect(name1).not.toBe(name2);
+        expect(manager.hooks.get('test:hook')).toHaveLength(2);
+      });
+
+      it('can remove hook using auto-generated name', () => {
+        const callback = jest.fn();
+        const hookName = manager.add('test:hook', callback);
+
+        manager.remove('test:hook', hookName);
+
+        expect(manager.hooks.get('test:hook')).toHaveLength(0);
+      });
+
+      it('works with default priority when name is omitted', () => {
+        const callback = jest.fn();
+        const hookName = manager.add('test:hook', callback);
+
+        const hooks = manager.hooks.get('test:hook');
+        expect(hooks[0].priority).toBe(10); // Default priority
+        expect(hooks[0].name).toBe(hookName);
+      });
+    });
+
+    describe('duplicate hook handling', () => {
+      it('warns and replaces when adding duplicate named hook', () => {
+        const warnSpy = jest.spyOn(console, 'warn').mockImplementation();
+        const callback1 = jest.fn();
+        const callback2 = jest.fn();
+
+        manager.add('test:hook', callback1, 10, 'duplicate');
+        manager.add('test:hook', callback2, 10, 'duplicate');
+
+        expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('Hook "duplicate" already exists'));
+
+        const hooks = manager.hooks.get('test:hook');
+        expect(hooks).toHaveLength(1);
+        expect(hooks[0].callback).toBe(callback2);
+
+        warnSpy.mockRestore();
+      });
+    });
+
+    describe('validation', () => {
+      it('throws error if callback is not a function', () => {
+        expect(() => {
+          manager.add('test:hook', 'not-a-function', 10, 'test');
+        }).toThrow('Callback must be a function');
+      });
+
+      it('throws error if explicit name is empty string', () => {
+        expect(() => {
+          manager.add('test:hook', jest.fn(), 10, '');
+        }).toThrow('Hook name must be a non-empty string');
+      });
+    });
   });
 
   describe('remove() - Removing individual hooks', () => {
@@ -190,7 +283,7 @@ describe('InterceptorManager', () => {
 
     it('throws error if provider is not a class', () => {
       expect(() => {
-        manager.attach('not-a-class');
+        manager.attach('not-a-class', 'some-name');
       }).toThrow('Invalid provider');
     });
 

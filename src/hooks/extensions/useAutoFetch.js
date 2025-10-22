@@ -30,7 +30,6 @@ export function useAutoFetch(interceptors, baseApi, config) {
     'onMount',
     'autoFetch:onMount',
     async (context) => {
-      console.log('DEBUG', 'here');
       if (!enabled || !runOnMount) return;
       // Check condition via interceptor (other extensions can override)
       // Default: true if no condition, or condition(context) result if provided
