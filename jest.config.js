@@ -1,4 +1,6 @@
 module.exports = {
+  preset: 'react-native',
+
   // Tells Jest to look for tests only in the 'src' directory.
   roots: ['<rootDir>/src'],
 

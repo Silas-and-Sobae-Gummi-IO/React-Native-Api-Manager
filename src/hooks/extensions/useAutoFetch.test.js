@@ -1,4 +1,4 @@
-import {renderHook, act} from '@testing-library/react-hooks';
+import {renderHook, act} from '@testing-library/react-native';
 import {useCoreApi} from '../useCoreApi';
 import {ApiClient} from '../../client/ApiClient';
 
@@ -161,7 +161,7 @@ describe('useAutoFetch', () => {
       const condition = () => false; // Would prevent fetch
 
       const useOverrideExtension = (interceptors) => {
-        interceptors.add('autoFetch:shouldFetch', 'override', () => true); // Override to allow
+        interceptors.add('autoFetch:shouldFetch', () => true); // Override to allow
         return {};
       };
 
@@ -248,7 +248,7 @@ describe('useAutoFetch', () => {
       let beforeFetchFired = false;
 
       const useCustomExtension = (interceptors) => {
-        interceptors.add('autoFetch:beforeFetch', 'custom', () => {
+        interceptors.add('autoFetch:beforeFetch', () => {
           beforeFetchFired = true;
         });
         return {};
@@ -282,7 +282,7 @@ describe('useAutoFetch', () => {
       let afterFetchFired = false;
 
       const useCustomExtension = (interceptors) => {
-        interceptors.add('autoFetch:afterFetch', 'custom', () => {
+        interceptors.add('autoFetch:afterFetch', () => {
           afterFetchFired = true;
         });
         return {};
@@ -311,9 +311,7 @@ describe('useAutoFetch', () => {
   describe('Abort on unmount', () => {
     test('aborts request on unmount when configured', async () => {
       let abortCalled = false;
-      global.fetch.mockImplementation(
-        () => new Promise((resolve) => setTimeout(resolve, 1000))
-      );
+      global.fetch.mockImplementation(() => new Promise((resolve) => setTimeout(resolve, 1000)));
 
       const onAbort = jest.fn(() => {
         abortCalled = true;
@@ -343,9 +341,7 @@ describe('useAutoFetch', () => {
     });
 
     test('does not abort on unmount by default', async () => {
-      global.fetch.mockImplementation(
-        () => new Promise((resolve) => setTimeout(resolve, 1000))
-      );
+      global.fetch.mockImplementation(() => new Promise((resolve) => setTimeout(resolve, 1000)));
 
       const onAbort = jest.fn();
 
@@ -375,9 +371,14 @@ describe('useAutoFetch', () => {
 
   describe('Integration with other extensions', () => {
     test('auto-fetch works with pagination', async () => {
+      const mockApiData = {data: [{id: 1}], hasMore: true};
+
       global.fetch.mockResolvedValue({
         ok: true,
-        json: async () => ({data: [{id: 1}], hasMore: true}),
+        status: 200,
+        headers: new Headers({'Content-Type': 'application/json'}),
+        text: async () => JSON.stringify(mockApiData),
+        json: async () => mockApiData,
       });
 
       const {result} = renderHook(() =>

@@ -1,4 +1,4 @@
-import {renderHook, act} from '@testing-library/react-hooks';
+import {renderHook, act} from '@testing-library/react-native';
 import {useCoreApi} from '../useCoreApi';
 import {ApiClient} from '../../client/ApiClient';
 
@@ -211,7 +211,7 @@ describe('usePersist', () => {
 
       // Pagination should write to store via baseApi.updateResult
       expect(mockStore.update).toHaveBeenCalledWith([{id: 1}]);
-      
+
       // Results should come from store
       expect(result.current.results).toEqual(mockStore.data);
     });

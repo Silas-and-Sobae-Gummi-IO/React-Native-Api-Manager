@@ -1,4 +1,4 @@
-import {renderHook, act} from '@testing-library/react-hooks';
+import {renderHook, act} from '@testing-library/react-native';
 import {useCoreApi} from '../useCoreApi';
 import {ApiClient} from '../../client/ApiClient';
 
@@ -270,9 +270,10 @@ describe('usePagination', () => {
     test('isLoadingMore tracks loadMore state', async () => {
       let resolveFetch;
       global.fetch.mockImplementation(
-        () => new Promise((resolve) => {
-          resolveFetch = resolve;
-        })
+        () =>
+          new Promise((resolve) => {
+            resolveFetch = resolve;
+          })
       );
 
       const {result} = renderHook(() =>

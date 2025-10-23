@@ -1,4 +1,4 @@
-import {renderHook, act} from '@testing-library/react-hooks';
+import {renderHook, act} from '@testing-library/react-native';
 import {useCoreApi} from '../useCoreApi';
 import {ApiClient} from '../../client/ApiClient';
 
@@ -47,10 +47,7 @@ describe('useRefresh', () => {
         await result.current.refresh();
       });
 
-      expect(global.fetch).toHaveBeenCalledWith(
-        'https://api.example.com/posts',
-        expect.objectContaining({method: 'POST'})
-      );
+      expect(global.fetch).toHaveBeenCalledWith('https://api.example.com/posts', expect.objectContaining({method: 'POST'}));
 
       const sentBody = JSON.parse(global.fetch.mock.calls[0][1].body);
       expect(sentBody.category).toBe('tech');
@@ -59,9 +56,10 @@ describe('useRefresh', () => {
     test('isRefreshing tracks state during refresh', async () => {
       let resolveFetch;
       global.fetch.mockImplementation(
-        () => new Promise((resolve) => {
-          resolveFetch = resolve;
-        })
+        () =>
+          new Promise((resolve) => {
+            resolveFetch = resolve;
+          })
       );
 
       const {result} = renderHook(() =>

@@ -2,6 +2,12 @@ import {useState, useRef, useEffect, useCallback} from 'react';
 import {ApiClient} from '../client/ApiClient';
 import {InterceptorManager} from '../client/lib/InterceptorManager';
 
+function useLatestRef(value) {
+  const ref = useRef(value);
+  ref.current = value; // Always update the ref on every render
+  return ref;
+}
+
 /**
  * useBaseApi - Internal base hook for request state management
  *
@@ -62,6 +68,11 @@ export function useBaseApi(config, interceptors) {
   // Store updateResult function in ref so extensions can override it
   const updateResultRef = useRef(null);
 
+  // 1. Create refs for all state and props that callbacks need
+  const stateRef = useLatestRef({data, response, result, error, isLoading});
+  const configRef = useLatestRef(config); // For props like onSend, onError
+  const interceptorsRef = useLatestRef(interceptors);
+
   // Effect to trigger onDataChanged when data updates
   useEffect(() => {
     if (onDataChanged && prevDataRef.current !== data) {
@@ -72,7 +83,6 @@ export function useBaseApi(config, interceptors) {
 
   // Lifecycle hooks: onMount and onUnmount
   useEffect(() => {
-    console.log('asdf', interceptors);
     (async () => {
       await interceptors.run('onMount', undefined, {
         data,
@@ -99,93 +109,104 @@ export function useBaseApi(config, interceptors) {
    * @param {Object} overrides - One-time data overrides merged with current data
    * @returns {Promise} Resolves with response data
    */
-  const send = async (overrides = {}) => {
-    // Prevent concurrent requests
-    if (isLoading) {
-      console.warn('[useBaseApi] Request already in progress');
-      return;
-    }
+  const send = useCallback(
+    async (overrides = {}) => {
+      // 3. Read ALL state and props from the refs, not from variables
+      const {filterData, validateData, onSend, onResponse, onSuccess, onError, ...requestConfig} = configRef.current;
 
-    // Merge current data with overrides
-    let finalData = {...data, ...overrides};
-
-    // Run beforeSend hooks (extensions can modify finalData)
-    finalData = await interceptors.run('beforeSend', finalData, {data, overrides});
-
-    // Filter/transform data if provided
-    if (filterData) {
-      finalData = filterData(finalData);
-    }
-
-    // Validate data before sending
-    if (validateData) {
-      try {
-        const isValid = validateData(finalData);
-        if (isValid === false) {
-          console.warn('[useBaseApi] Data validation failed, aborting send');
-          return;
-        }
-      } catch (err) {
-        console.error('[useBaseApi] Data validation threw error:', err);
+      // Prevent concurrent requests
+      if (stateRef.current.isLoading) {
+        console.warn('[useBaseApi] Request already in progress');
         return;
       }
-    }
 
-    // Start loading
-    setIsLoading(true);
-    setError(null);
+      // Merge current data with overrides
+      let finalData = {...stateRef.current.data, ...overrides};
 
-    // Call onSend hook
-    onSend?.(finalData);
+      // Run beforeSend hooks (extensions can modify finalData)
+      finalData = await interceptorsRef.current.run('beforeSend', finalData, {data: stateRef.current.data, overrides});
 
-    try {
-      // Create fresh request each time (fresh AbortController for proper abort)
-      // Use client.request() which handles URL parsing
-      const request = client.request(url, {
-        ...requestConfig,
-        body: finalData, // Merge finalData into body
-      });
-
-      // Store current request for abort access
-      currentRequestRef.current = request;
-
-      // Send request and get parsed data
-      const parsedData = await request.send();
-
-      // Get full response from request instance for onResponse
-      const fullResponse = currentRequestRef.current._context?._response;
-
-      // Call onResponse with full response object
-      if (onResponse && fullResponse) {
-        onResponse(fullResponse);
+      // Filter/transform data if provided
+      if (filterData) {
+        finalData = filterData(finalData);
       }
 
-      // Update state on success
-      setResponse(parsedData);
-      updateResultRef.current(parsedData); // Use ref so extensions can intercept
-      setIsLoading(false);
+      // Validate data before sending
+      if (validateData) {
+        try {
+          const isValid = validateData(finalData);
+          if (isValid === false) {
+            console.warn('[useBaseApi] Data validation failed, aborting send');
+            return;
+          }
+        } catch (err) {
+          console.error('[useBaseApi] Data validation threw error:', err);
+          return;
+        }
+      }
 
-      // Call success callback with parsed data
-      onSuccess?.(parsedData);
+      // Start loading
+      setIsLoading(true);
+      setError(null);
 
-      // Run afterSend hooks (extensions can react to response)
-      await interceptors.run('afterSend', parsedData, {data: finalData, response: parsedData, result, fullResponse});
+      // Call onSend hook
+      onSend?.(finalData);
 
-      return parsedData;
-    } catch (err) {
-      // Update state on error
-      setError(err);
-      setIsLoading(false);
+      try {
+        // Create fresh request each time (fresh AbortController for proper abort)
+        // Use client.request() which handles URL parsing
+        const request = client.request(url, {
+          ...requestConfig,
+          body: finalData, // Merge finalData into body
+        });
 
-      // Call error callback
-      onError?.(err);
+        // Store current request for abort access
+        currentRequestRef.current = request;
 
-      // Run onError hooks
-      await interceptors.run('onError', err, {data: finalData});
+        // Send request and get parsed data
+        const parsedData = await request.send();
 
-      throw err;
-    }
-  };
+        // Get full response from request instance for onResponse
+        const fullResponse = currentRequestRef.current._context?._response;
+
+        // Call onResponse with full response object
+        onResponse?.(fullResponse);
+
+        // Update state on success
+        setResponse(fullResponse);
+
+        const filteredData = await interceptorsRef.current.run('filterData', parsedData, {
+          data: finalData,
+          response: parsedData,
+          result: stateRef.current.result,
+          fullResponse,
+        });
+        updateResultRef.current(filteredData); // Use ref so extensions can intercept
+        setIsLoading(false);
+
+        // Call success callback with parsed data
+        onSuccess?.(filteredData);
+
+        // Run afterSend hooks (extensions can react to response)
+        await interceptorsRef.current.run('afterSend', undefined, {data: finalData, response: parsedData, result: stateRef.current.result, fullResponse});
+
+        return filteredData;
+      } catch (err) {
+        // Update state on error
+        setError(err);
+        setIsLoading(false);
+
+        // Call error callback
+        onError?.(err);
+
+        // Run onError hooks
+        await interceptorsRef.current.run('onError', err, {data: finalData});
+
+        throw err;
+      }
+    },
+    [client, url]
+  );
 
   /**
    * Update a single field in data
@@ -247,17 +268,17 @@ export function useBaseApi(config, interceptors) {
    */
   const reset = async () => {
     // Run beforeReset hooks
-    await interceptors.run('beforeReset', undefined, {data, response, result, error});
+    await interceptorsRef.current.run('beforeReset', undefined, {data, response, result, error});
 
-    setData(initialData);
+    setData(configRef.current.initialData || {});
     setResponse(null);
     setResult(null);
     setError(null);
     setIsLoading(false);
-    onReset?.();
+    configRef.current.onReset?.();
 
     // Run afterReset hooks
-    await interceptors.run('afterReset', undefined, {});
+    await interceptorsRef.current.run('afterReset', undefined, {});
   };
 
   /**
@@ -268,10 +289,10 @@ export function useBaseApi(config, interceptors) {
     const request = currentRequestRef.current;
     if (request) {
       request.abort(reason);
-      onAbort?.(reason);
+      configRef.current.onAbort?.(reason);
 
       // Run onAbort hooks
-      await interceptors.run('onAbort', reason, {request});
+      await interceptorsRef.current.run('onAbort', reason, {request});
     }
   };
 

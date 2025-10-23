@@ -15,8 +15,8 @@ export class StatusHandlerInterceptor extends BaseInterceptor {
   }
 
   async _checkStatus(response, context) {
-    const config = context.config;
-    
+    const config = context?.config;
+
     // If onStatus handler exists for this status code, use it as escape hatch
     if (config?.onStatus?.[response.status]) {
       return config.onStatus[response.status](response);

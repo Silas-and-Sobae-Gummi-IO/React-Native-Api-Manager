@@ -1,4 +1,4 @@
-import {renderHook, act} from '@testing-library/react-hooks';
+import {renderHook, act} from '@testing-library/react-native';
 import {useCoreApi} from './useCoreApi';
 import {ApiClient} from '../client/ApiClient';
 
@@ -96,7 +96,7 @@ describe('useCoreApi', () => {
       expect(result.current.refresh).toBeDefined();
     });
 
-    test.only('autoFetch extension works', async () => {
+    test('autoFetch extension works', async () => {
       let fetchCount = 0;
       global.fetch.mockImplementation(async () => {
         fetchCount++;
@@ -308,7 +308,8 @@ describe('useCoreApi', () => {
     test('extensions can communicate through interceptors', async () => {
       global.fetch.mockResolvedValue({
         ok: true,
-        json: async () => ({data: [{id: 1}], hasMore: true}),
+        headers: new Headers({'Content-Type': 'application/json'}),
+        text: async () => JSON.stringify({data: [{id: 1}], hasMore: true}),
       });
 
       const {result} = renderHook(() =>
@@ -334,7 +335,7 @@ describe('useCoreApi', () => {
         await new Promise((r) => setTimeout(r, 10));
       });
 
-      expect(result.current.results).toEqual([{id: 1}]);
+      expect(result.current.result).toEqual([{id: 1}]);
 
       // Refresh should reset pagination
       await act(async () => {
@@ -347,7 +348,7 @@ describe('useCoreApi', () => {
       });
 
       // Pagination should be reset (results replaced, not appended)
-      expect(result.current.results.length).toBe(1);
+      expect(result.current.result.length).toBe(1);
     });
   });
 });

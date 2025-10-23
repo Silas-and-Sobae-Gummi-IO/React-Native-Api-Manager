@@ -1,4 +1,4 @@
-import {useState, useRef, useEffect} from 'react';
+import {useState, useRef, useEffect, useCallback} from 'react';
 
 /**
  * usePagination - Self-contained extension for pagination/infinite scroll
@@ -50,7 +50,7 @@ export function usePagination(interceptors, baseApi, config) {
   /**
    * Load more data (get next page and append results)
    */
-  const loadMore = async () => {
+  const loadMore = useCallback(async () => {
     if (isLoadingMore || !hasMore) {
       return;
     }
@@ -82,74 +82,74 @@ export function usePagination(interceptors, baseApi, config) {
       setIsLoadingMore(false);
       throw err;
     }
-  };
+  }, [isLoadingMore, hasMore, interceptors, baseApi, config]);
 
   /**
    * Reset pagination state
    */
-  const resetPagination = () => {
+  const resetPagination = useCallback(() => {
     baseApi.updateResult([]);
     setHasMore(true);
     setIsLoadingMore(false);
     lastResponseRef.current = null;
-  };
+  }, [baseApi.updateResult]);
 
-  // Register interceptors for pagination lifecycle
-  useEffect(() => {
-    // After send: accumulate results
-    interceptors.add(
-      'afterSend',
-      'pagination:afterSend',
-      (parsedData, context) => {
-        // Store last response for cursor pagination
-        lastResponseRef.current = parsedData;
+  // After send: accumulate results
+  interceptors.remove('filterData', 'pagination:filterData');
+  interceptors.add(
+    'filterData',
+    (parsedData, context) => {
+      // Store last response for cursor pagination
+      lastResponseRef.current = parsedData;
 
-        // Extract new results
-        const newResults = extractResults(parsedData);
+      // Extract new results
+      const newResults = extractResults(parsedData);
 
-        // Decide whether to replace or append
-        const replace = shouldReplace({results, response: parsedData, context});
+      // Decide whether to replace or append
+      const replace = shouldReplace({results, response: parsedData, context});
 
-        if (replace) {
-          baseApi.updateResult(newResults);
-        } else {
-          baseApi.updateResult([...(results || []), ...newResults]);
-        }
+      if (replace) {
+        return newResults;
+      } else {
+        return [...(results || []), ...newResults];
+      }
+    },
+    10,
+    'pagination:filterData'
+  );
 
-        // Update hasMore status
-        const moreAvailable = hasMoreFn(parsedData);
-        setHasMore(moreAvailable);
-      },
-      10
-    );
+  interceptors.remove('afterSend', 'pagination:afterSend');
+  interceptors.add(
+    'afterSend',
+    ({response}) => {
+      const moreAvailable = hasMoreFn(response);
+      setHasMore(moreAvailable);
+    },
+    10,
+    'pagination:afterSend'
+  );
 
-    // Before reset: clear pagination state
-    interceptors.add(
-      'beforeReset',
-      'pagination:beforeReset',
-      () => {
-        resetPagination();
-      },
-      10
-    );
+  // Interceptor for `beforeReset`
+  interceptors.remove('beforeReset', 'pagination:beforeReset');
+  interceptors.add(
+    'beforeReset',
+    () => {
+      resetPagination();
+    },
+    10,
+    'pagination:beforeReset'
+  );
 
-    // Before refresh: reset pagination (back to page 1)
-    interceptors.add(
-      'refresh:beforeSend',
-      'pagination:resetOnRefresh',
-      () => {
-        resetPagination();
-      },
-      10
-    );
-
-    // Cleanup on unmount
-    return () => {
-      interceptors.remove('afterSend', 'pagination:afterSend');
-      interceptors.remove('beforeReset', 'pagination:beforeReset');
-      interceptors.remove('refresh:beforeSend', 'pagination:resetOnRefresh');
-    };
-  }, [results]); // Re-register when results change (for shouldReplace check)
+  // Before refresh: reset pagination (back to page 1)
+  interceptors.remove('refresh:beforeSend', 'pagination:resetOnRefresh');
+  interceptors.add(
+    'refresh:beforeSend',
+    () => {
+      resetPagination();
+    },
+    10,
+    'pagination:resetOnRefresh'
+  );
 
   return {
     // Pagination state

@@ -1,4 +1,4 @@
-import {renderHook, act} from '@testing-library/react-hooks';
+import {renderHook, act} from '@testing-library/react-native';
 import {useBaseApi} from './useBaseApi';
 import {ApiClient} from '../client/ApiClient';
 import {InterceptorManager} from '../client/lib/InterceptorManager';
@@ -49,10 +49,7 @@ describe('useBaseApi', () => {
         await result.current.send();
       });
 
-      expect(global.fetch).toHaveBeenCalledWith(
-        'https://api.example.com/test',
-        expect.objectContaining({method: 'POST'})
-      );
+      expect(global.fetch).toHaveBeenCalledWith('https://api.example.com/test', expect.objectContaining({method: 'POST'}));
       expect(result.current.isLoading).toBe(false);
       expect(result.current.response).toBeDefined();
     });
@@ -279,9 +276,7 @@ describe('useBaseApi', () => {
     });
 
     test('abort() cancels ongoing request', async () => {
-      global.fetch.mockImplementation(
-        () => new Promise((resolve) => setTimeout(resolve, 1000))
-      );
+      global.fetch.mockImplementation(() => new Promise((resolve) => setTimeout(resolve, 1000)));
 
       const {result} = renderHook(() =>
         useBaseApi({
@@ -330,10 +325,7 @@ describe('useBaseApi', () => {
         await result.current.send();
       });
 
-      expect(beforeSendSpy).toHaveBeenCalledWith(
-        {foo: 'bar'},
-        expect.objectContaining({data: {foo: 'bar'}})
-      );
+      expect(beforeSendSpy).toHaveBeenCalledWith({foo: 'bar'}, expect.objectContaining({data: {foo: 'bar'}}));
     });
 
     test('runs onMount hook', async () => {
@@ -363,9 +355,7 @@ describe('useBaseApi', () => {
 
   describe('Concurrent request handling', () => {
     test('prevents concurrent requests', async () => {
-      global.fetch.mockImplementation(
-        () => new Promise((resolve) => setTimeout(() => resolve({ok: true, json: async () => ({})}), 100))
-      );
+      global.fetch.mockImplementation(() => new Promise((resolve) => setTimeout(() => resolve({ok: true, json: async () => ({})}), 100)));
 
       const {result} = renderHook(() =>
         useBaseApi({
