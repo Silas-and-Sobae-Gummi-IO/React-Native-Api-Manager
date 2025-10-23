@@ -335,7 +335,7 @@ describe('useCoreApi', () => {
         await new Promise((r) => setTimeout(r, 10));
       });
 
-      expect(result.current.result).toEqual([{id: 1}]);
+      expect(result.current.results).toEqual([{id: 1}]);
 
       // Refresh should reset pagination
       await act(async () => {
@@ -348,7 +348,7 @@ describe('useCoreApi', () => {
       });
 
       // Pagination should be reset (results replaced, not appended)
-      expect(result.current.result.length).toBe(1);
+      expect(result.current.results.length).toBe(1);
     });
   });
 });

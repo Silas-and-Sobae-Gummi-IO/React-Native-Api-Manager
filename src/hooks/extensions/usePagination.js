@@ -46,6 +46,9 @@ export function usePagination(interceptors, baseApi, config) {
 
   // Track last response for cursor pagination
   const lastResponseRef = useRef(null);
+  
+  // Track if we're in a refresh/reset state
+  const isResetRef = useRef(false);
 
   /**
    * Load more data (get next page and append results)
@@ -92,6 +95,7 @@ export function usePagination(interceptors, baseApi, config) {
     setHasMore(true);
     setIsLoadingMore(false);
     lastResponseRef.current = null;
+    isResetRef.current = true; // Mark as reset
   }, [baseApi.updateResult]);
 
   // After send: accumulate results
@@ -105,13 +109,22 @@ export function usePagination(interceptors, baseApi, config) {
       // Extract new results
       const newResults = extractResults(parsedData);
 
+      // Get current results directly (not from closure)
+      const currentResults = baseApi.result || [];
+
       // Decide whether to replace or append
-      const replace = shouldReplace({results, response: parsedData, context});
+      // Always replace if we just reset
+      const replace = isResetRef.current || shouldReplace({results: currentResults, response: parsedData, context});
+      
+      // Clear reset flag after first filter
+      if (isResetRef.current) {
+        isResetRef.current = false;
+      }
 
       if (replace) {
         return newResults;
       } else {
-        return [...(results || []), ...newResults];
+        return [...currentResults, ...newResults];
       }
     },
     10,
