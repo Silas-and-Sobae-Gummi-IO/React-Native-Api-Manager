@@ -5,9 +5,11 @@ import {InterceptorManager} from '../client/lib/InterceptorManager';
 
 describe('useBaseApi', () => {
   let client;
+  let interceptors;
 
   beforeEach(() => {
     client = new ApiClient({baseURL: 'https://api.example.com'});
+    interceptors = new InterceptorManager();
     global.fetch = jest.fn();
   });
 
@@ -18,11 +20,14 @@ describe('useBaseApi', () => {
   describe('Basic functionality', () => {
     test('initializes with default state', () => {
       const {result} = renderHook(() =>
-        useBaseApi({
-          client,
-          url: 'GET:/test',
-          initialData: {foo: 'bar'},
-        })
+        useBaseApi(
+          {
+            client,
+            url: 'GET:/test',
+            initialData: {foo: 'bar'},
+          },
+          interceptors
+        )
       );
 
       expect(result.current.data).toEqual({foo: 'bar'});
@@ -38,11 +43,14 @@ describe('useBaseApi', () => {
       });
 
       const {result} = renderHook(() =>
-        useBaseApi({
-          client,
-          url: 'POST:/test',
-          initialData: {name: 'test'},
-        })
+        useBaseApi(
+          {
+            client,
+            url: 'POST:/test',
+            initialData: {name: 'test'},
+          },
+          interceptors
+        )
       );
 
       await act(async () => {
@@ -61,11 +69,14 @@ describe('useBaseApi', () => {
       });
 
       const {result} = renderHook(() =>
-        useBaseApi({
-          client,
-          url: 'POST:/test',
-          initialData: {name: 'test', age: 25},
-        })
+        useBaseApi(
+          {
+            client,
+            url: 'POST:/test',
+            initialData: {name: 'test', age: 25},
+          },
+          interceptors
+        )
       );
 
       await act(async () => {
@@ -83,11 +94,14 @@ describe('useBaseApi', () => {
 
       const onError = jest.fn();
       const {result} = renderHook(() =>
-        useBaseApi({
-          client,
-          url: 'GET:/test',
-          onError,
-        })
+        useBaseApi(
+          {
+            client,
+            url: 'GET:/test',
+            onError,
+          },
+          interceptors
+        )
       );
 
       await act(async () => {
@@ -107,11 +121,14 @@ describe('useBaseApi', () => {
   describe('Data mutations', () => {
     test('updateData() updates single field', () => {
       const {result} = renderHook(() =>
-        useBaseApi({
-          client,
-          url: 'GET:/test',
-          initialData: {name: 'test', age: 25},
-        })
+        useBaseApi(
+          {
+            client,
+            url: 'GET:/test',
+            initialData: {name: 'test', age: 25},
+          },
+          interceptors
+        )
       );
 
       act(() => {
@@ -123,11 +140,14 @@ describe('useBaseApi', () => {
 
     test('setData() replaces entire data object', () => {
       const {result} = renderHook(() =>
-        useBaseApi({
-          client,
-          url: 'GET:/test',
-          initialData: {name: 'test'},
-        })
+        useBaseApi(
+          {
+            client,
+            url: 'GET:/test',
+            initialData: {name: 'test'},
+          },
+          interceptors
+        )
       );
 
       act(() => {
@@ -139,11 +159,14 @@ describe('useBaseApi', () => {
 
     test('handleDataChange() returns change handler', () => {
       const {result} = renderHook(() =>
-        useBaseApi({
-          client,
-          url: 'GET:/test',
-          initialData: {name: 'test'},
-        })
+        useBaseApi(
+          {
+            client,
+            url: 'GET:/test',
+            initialData: {name: 'test'},
+          },
+          interceptors
+        )
       );
 
       act(() => {
@@ -164,11 +187,14 @@ describe('useBaseApi', () => {
 
       const onSuccess = jest.fn();
       const {result} = renderHook(() =>
-        useBaseApi({
-          client,
-          url: 'GET:/test',
-          onSuccess,
-        })
+        useBaseApi(
+          {
+            client,
+            url: 'GET:/test',
+            onSuccess,
+          },
+          interceptors
+        )
       );
 
       await act(async () => {
@@ -187,12 +213,15 @@ describe('useBaseApi', () => {
       const filterData = jest.fn((data) => ({...data, filtered: true}));
 
       const {result} = renderHook(() =>
-        useBaseApi({
-          client,
-          url: 'POST:/test',
-          initialData: {name: 'test'},
-          filterData,
-        })
+        useBaseApi(
+          {
+            client,
+            url: 'POST:/test',
+            initialData: {name: 'test'},
+            filterData,
+          },
+          interceptors
+        )
       );
 
       await act(async () => {
@@ -205,14 +234,18 @@ describe('useBaseApi', () => {
     });
 
     test('validateData can abort send', async () => {
+      const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
       const validateData = jest.fn(() => false);
 
       const {result} = renderHook(() =>
-        useBaseApi({
-          client,
-          url: 'GET:/test',
-          validateData,
-        })
+        useBaseApi(
+          {
+            client,
+            url: 'GET:/test',
+            validateData,
+          },
+          interceptors
+        )
       );
 
       await act(async () => {
@@ -221,18 +254,24 @@ describe('useBaseApi', () => {
 
       expect(validateData).toHaveBeenCalled();
       expect(global.fetch).not.toHaveBeenCalled();
+      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('Data validation failed, aborting send'));
+      expect(warnSpy).toHaveBeenCalledTimes(1);
+      warnSpy.mockRestore();
     });
 
     test('onDataChanged called when data updates', () => {
       const onDataChanged = jest.fn();
 
       const {result} = renderHook(() =>
-        useBaseApi({
-          client,
-          url: 'GET:/test',
-          initialData: {count: 1},
-          onDataChanged,
-        })
+        useBaseApi(
+          {
+            client,
+            url: 'GET:/test',
+            initialData: {count: 1},
+            onDataChanged,
+          },
+          interceptors
+        )
       );
 
       act(() => {
@@ -251,11 +290,14 @@ describe('useBaseApi', () => {
       });
 
       const {result} = renderHook(() =>
-        useBaseApi({
-          client,
-          url: 'GET:/test',
-          initialData: {name: 'initial'},
-        })
+        useBaseApi(
+          {
+            client,
+            url: 'GET:/test',
+            initialData: {name: 'initial'},
+          },
+          interceptors
+        )
       );
 
       await act(async () => {
@@ -279,10 +321,13 @@ describe('useBaseApi', () => {
       global.fetch.mockImplementation(() => new Promise((resolve) => setTimeout(resolve, 1000)));
 
       const {result} = renderHook(() =>
-        useBaseApi({
-          client,
-          url: 'GET:/test',
-        })
+        useBaseApi(
+          {
+            client,
+            url: 'GET:/test',
+          },
+          interceptors
+        )
       );
 
       act(() => {
@@ -305,10 +350,9 @@ describe('useBaseApi', () => {
         json: async () => ({data: 'test'}),
       });
 
-      const interceptors = new InterceptorManager();
       const beforeSendSpy = jest.fn((data) => data);
 
-      interceptors.add('beforeSend', 'test', beforeSendSpy);
+      interceptors.add('beforeSend', beforeSendSpy);
 
       const {result} = renderHook(() =>
         useBaseApi(
@@ -329,10 +373,9 @@ describe('useBaseApi', () => {
     });
 
     test('runs onMount hook', async () => {
-      const interceptors = new InterceptorManager();
       const onMountSpy = jest.fn();
 
-      interceptors.add('onMount', 'test', onMountSpy);
+      interceptors.add('onMount', onMountSpy);
 
       renderHook(() =>
         useBaseApi(
@@ -355,13 +398,17 @@ describe('useBaseApi', () => {
 
   describe('Concurrent request handling', () => {
     test('prevents concurrent requests', async () => {
+      const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
       global.fetch.mockImplementation(() => new Promise((resolve) => setTimeout(() => resolve({ok: true, json: async () => ({})}), 100)));
 
       const {result} = renderHook(() =>
-        useBaseApi({
-          client,
-          url: 'GET:/test',
-        })
+        useBaseApi(
+          {
+            client,
+            url: 'GET:/test',
+          },
+          interceptors
+        )
       );
 
       // Start first request
@@ -384,6 +431,9 @@ describe('useBaseApi', () => {
 
       // Only one fetch should have been made
       expect(global.fetch).toHaveBeenCalledTimes(1);
+      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('Request already in progress'));
+      expect(warnSpy).toHaveBeenCalledTimes(1);
+      warnSpy.mockRestore();
     });
   });
 });

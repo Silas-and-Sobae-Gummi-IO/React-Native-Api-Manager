@@ -84,7 +84,7 @@ export function useBaseApi(config, interceptors) {
   // Lifecycle hooks: onMount and onUnmount
   useEffect(() => {
     (async () => {
-      await interceptors.run('onMount', undefined, {
+      await interceptorsRef.current.run('onMount', undefined, {
         data,
         response,
         error,
@@ -94,7 +94,7 @@ export function useBaseApi(config, interceptors) {
 
     return () => {
       (async () => {
-        await interceptors.run('onUnmount', undefined, {
+        await interceptorsRef.current.run('onUnmount', undefined, {
           data,
           response,
           error,
