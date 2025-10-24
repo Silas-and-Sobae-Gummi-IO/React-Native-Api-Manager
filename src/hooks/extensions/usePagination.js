@@ -23,7 +23,9 @@ export function usePagination(interceptors, baseApi, config) {
 
   const {
     pageKey = 'page',
-    getNextPageData = (currentData) => ({[pageKey]: (currentData[pageKey] || 1) + 1}),
+    getNextPageData = (currentData) => ({...currentData, [pageKey]: (currentData[pageKey] || 1) + 1}),
+    // @TODO need to test this
+    getResetData = (currentData) => ({...currentData, [pageKey]: 1}),
     hasMoreFn = () => true,
     extractResults = (response) => response?.data || response || [],
     shouldReplace = (context) => context.results.length === 0,
@@ -46,7 +48,7 @@ export function usePagination(interceptors, baseApi, config) {
 
   // Track last response for cursor pagination
   const lastResponseRef = useRef(null);
-  
+
   // Track if we're in a refresh/reset state
   const isResetRef = useRef(false);
 
@@ -99,9 +101,9 @@ export function usePagination(interceptors, baseApi, config) {
   }, [baseApi.updateResult]);
 
   // After send: accumulate results
-  interceptors.remove('filterData', 'pagination:filterData');
-  interceptors.add(
+  interceptors.replace(
     'filterData',
+    'pagination:filterData',
     (parsedData, context) => {
       // Store last response for cursor pagination
       lastResponseRef.current = parsedData;
@@ -115,7 +117,7 @@ export function usePagination(interceptors, baseApi, config) {
       // Decide whether to replace or append
       // Always replace if we just reset
       const replace = isResetRef.current || shouldReplace({results: currentResults, response: parsedData, context});
-      
+
       // Clear reset flag after first filter
       if (isResetRef.current) {
         isResetRef.current = false;
@@ -127,42 +129,53 @@ export function usePagination(interceptors, baseApi, config) {
         return [...currentResults, ...newResults];
       }
     },
-    10,
-    'pagination:filterData'
+    10
   );
 
-  interceptors.remove('afterSend', 'pagination:afterSend');
-  interceptors.add(
+  interceptors.replace(
     'afterSend',
+    'pagination:afterSend',
     ({response}) => {
       const moreAvailable = hasMoreFn(response);
       setHasMore(moreAvailable);
     },
-    10,
-    'pagination:afterSend'
+    10
   );
 
   // Interceptor for `beforeReset`
-  interceptors.remove('beforeReset', 'pagination:beforeReset');
-  interceptors.add(
+  interceptors.replace(
     'beforeReset',
+    'pagination:beforeReset',
     () => {
       resetPagination();
     },
-    10,
-    'pagination:beforeReset'
+    10
   );
 
   // Before refresh: reset pagination (back to page 1)
-  interceptors.remove('refresh:beforeSend', 'pagination:resetOnRefresh');
-  interceptors.add(
+  interceptors.replace(
     'refresh:beforeSend',
+    'pagination:resetOnRefresh',
     () => {
       resetPagination();
     },
-    10,
-    'pagination:resetOnRefresh'
+    10
   );
+
+  interceptors.replace(
+    'refresh:overwriteData',
+    'pagination:overwriteData',
+    (overrides) => {
+      return getResetData(overrides);
+    },
+    10
+  );
+
+  interceptors.replace('persist:onStoreUpdated', 'pagination:onStoreUpdated', ({store, dataKey, response}) => {
+    if (store.update && dataKey) {
+      store.update(dataKey, {hasMore: hasMoreFn(response)});
+    }
+  });
 
   return {
     // Pagination state

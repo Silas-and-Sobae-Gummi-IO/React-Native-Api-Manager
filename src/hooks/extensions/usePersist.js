@@ -1,86 +1,75 @@
-import {useEffect, useMemo, useCallback} from 'react';
+import {useCallback} from 'react';
 
 /**
  * usePersist - Store integration extension
- * 
- * Connects API result/metadata to external reactive store.
- * Store becomes source of truth for UI rendering.
- * 
+ *
+ * Connects API result/metadata to external reactive store (Zustand, Redux, etc).
+ * Store becomes the reactive source of truth for UI rendering.
+ *
+ * Flow:
+ * 1. Reads initial value from store (reactive via store.use hook)
+ * 2. On API response, syncs data to store via filterData interceptor
+ * 3. External store changes automatically reflect in UI (store reactivity)
+ *
  * @param {Object} interceptors - InterceptorManager instance
  * @param {Object} baseApi - Base API object
- * @param {Object|null} config - Persist config
+ * @param {Object|null} config - Persist config (null to disable)
  * @param {Object} config.store - Store integration config
- * @param {Function} config.store.use - Hook to read from store
- * @param {Function} config.store.update - Function to write to store
- * @param {Function} config.store.fetchMeta - Hook to read metadata (optional)
- * @param {Function} config.store.updateMeta - Function to write metadata (optional)
+ * @param {Function} config.store.use - Hook to read from store: (key) => value
+ * @param {Function} config.store.update - Function to write to store: (key, value) => void
+ * @param {Function} config.store.useMeta - Hook to read metadata (optional): (key) => value
+ * @param {Function} config.store.updateMeta - Function to write metadata (optional): (key, value) => void
  * @param {string} config.dataKey - Key for result data in store
  * @param {string} config.metaKey - Key for metadata in store (optional)
- * @param {Object} config.defaults - Default values for metadata
- * @returns {Object} Persisted state (overrides baseApi.result)
+ * @param {Object} config.defaults - Default values for metadata (optional)
+ * @returns {Object} Persisted state (overrides baseApi.result with store value)
+ *
+ * @example
+ * // With Zustand
+ * const useStore = create((set) => ({
+ *   posts: [],
+ *   setPosts: (posts) => set({posts})
+ * }));
+ *
+ * const api = useCoreApi({
+ *   url: 'GET:/posts',
+ *   persist: {
+ *     store: {
+ *       use: () => useStore(state => state.posts),
+ *       update: (key, value) => useStore.getState().setPosts(value)
+ *     },
+ *     dataKey: 'posts'
+ *   }
+ * });
  */
 export function usePersist(interceptors, baseApi, config) {
+  // Return empty if not configured
   if (!config) return {};
 
-  const {
-    store,
-    dataKey,
-    metaKey,
-    defaults = {},
-  } = config;
+  const {store, dataKey, metaKey, defaults = {}} = config;
 
-  // Read from store (reactive)
-  const result = store.use ? store.use() : null;
-  const meta = store.fetchMeta && metaKey ? store.fetchMeta(metaKey) : null;
+  // Read from store (reactive - this is the key!)
+  // When store updates elsewhere, this hook re-renders automatically
+  const storeResult = store.use ? store.use(dataKey) : null;
+  const storeMeta = store.useMeta && metaKey ? store.useMeta(metaKey) : null;
 
-  // Override baseApi._updateResultRef to write to store
-  useEffect(() => {
-    if (!baseApi._updateResultRef) return;
+  // Sync API responses to store via filterData interceptor
+  interceptors.replace('afterSend', 'persist:syncToStore', async (context) => {
+    // Write response data to store
+    if (store.update && dataKey) {
+      store.update(dataKey, context.filteredData);
+    }
 
-    const originalUpdateResult = baseApi._updateResultRef.current;
-    
-    // Override with store-aware implementation
-    baseApi._updateResultRef.current = (newResult) => {
-      // Write to external store
-      if (store.update) {
-        store.update(newResult);
-      }
-      // Also update local state as fallback
-      originalUpdateResult(newResult);
-    };
+    await interceptors.run('persist:onStoreUpdated', undefined, {
+      ...context,
+      persistConfig: config,
+      store,
+    });
+  });
 
-    // Cleanup: restore original
-    return () => {
-      if (baseApi._updateResultRef) {
-        baseApi._updateResultRef.current = originalUpdateResult;
-      }
-    };
-  }, [baseApi, store]);
-
-  // After send: sync to store
-  useEffect(() => {
-    const hookId = 'persist:sync';
-    
-    interceptors.add('afterSend', hookId, (parsedData) => {
-      // baseApi.updateResult already called by useBaseApi.send()
-      // Just update metadata if needed
-      if (metaKey && store.updateMeta) {
-        const currentMeta = meta || {};
-        store.updateMeta(metaKey, {
-          ...defaults,
-          ...currentMeta,
-        });
-      }
-      return parsedData;
-    }, 5); // Priority 5 - run before pagination
-
-    return () => interceptors.remove('afterSend', hookId);
-  }, [interceptors, metaKey, store, meta, defaults]);
-
-  // Return overrides for baseApi
+  // Return overrides - store value replaces baseApi.result
   return {
-    result, // From store (reactive)
-    // Expose metadata if available
-    ...(meta && {meta}),
+    result: storeResult, // This overrides baseApi.result (reactive!)
+    ...(storeMeta && {meta: storeMeta}), // Optional metadata
   };
 }

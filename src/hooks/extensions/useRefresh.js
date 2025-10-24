@@ -2,10 +2,10 @@ import {useState} from 'react';
 
 /**
  * useRefresh - Self-contained extension for pull-to-refresh
- * 
+ *
  * Manages its own state (isRefreshing) and provides refresh method.
  * Returns empty object if config is null/undefined.
- * 
+ *
  * @param {Object} interceptors - InterceptorManager instance (unused for now)
  * @param {Object} baseApi - Base API object for accessing send/reset
  * @param {Object|null} config - Refresh config (null to disable)
@@ -26,7 +26,7 @@ export function useRefresh(interceptors, baseApi, config) {
    */
   const refresh = async (resetData = false) => {
     setIsRefreshing(true);
-    
+
     // Call onRefresh hook if provided
     onRefresh?.();
 
@@ -39,12 +39,15 @@ export function useRefresh(interceptors, baseApi, config) {
         baseApi.reset();
       }
 
+      // @TODO need test
+      const overwriteData = await interceptors.run('refresh:sendData', {}, {resetData});
+
       // Send request with current data
-      const result = await baseApi.send();
+      const result = await baseApi.send(overwriteData);
 
       // Run refresh:afterSend hooks
       await interceptors.run('refresh:afterSend', result, {resetData});
-      
+
       setIsRefreshing(false);
       return result;
     } catch (err) {

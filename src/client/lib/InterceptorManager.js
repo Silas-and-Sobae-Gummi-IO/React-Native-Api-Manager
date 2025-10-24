@@ -68,6 +68,24 @@ export class InterceptorManager {
   }
 
   /**
+   * Replace an existing hook or add if it doesn't exist (no warning)
+   * More explicit than add() when you know the hook exists
+   * @param {string} hookName - The hook to attach to
+   * @param {string} name - The unique name of the hook (required)
+   * @param {function} callback - The callback function
+   * @param {number} priority - Execution priority (lower = earlier)
+   * @returns {string} The hook name
+   */
+  replace(hookName, name, callback, priority = 10) {
+    if (!name) {
+      throw new Error('replace() requires an explicit name');
+    }
+
+    this.remove(hookName, name);
+    return this.add(hookName, callback, priority, name);
+  }
+
+  /**
    * Attach a class-based interceptor provider
    * @param {class} Provider - must extend BaseInterceptor
    * @param {string} name - optional explicit name
@@ -109,23 +127,38 @@ export class InterceptorManager {
   }
 
   /**
-   * Run a hook chain
+   * Run a hook chain (WordPress-style with dynamic hook support)
+   * Supports hooks being added/removed during execution
    * @param {string} hookName - The hook to run
    * @param {*} value - Initial value to pass through the chain
    * @param {object} context - Additional context for callbacks
    * @returns {*} The final value after all callbacks
    */
   async run(hookName, value = undefined, context = {}) {
-    const list = this.hooks.get(hookName) || [];
     let out = value;
+    let index = 0;
+    const maxIterations = 1000; // Safety guard against infinite loops
+    let iterations = 0;
 
-    for (const item of list) {
+    // Read live list on each iteration (supports dynamic registration)
+    while (index < (this.hooks.get(hookName) || []).length) {
+      if (++iterations > maxIterations) {
+        throw new Error(
+          `Hook "${hookName}" exceeded ${maxIterations} iterations. ` +
+          `Possible infinite loop from self-registering hooks.`
+        );
+      }
+
+      const item = this.hooks.get(hookName)[index];
+
       // Dont put a try catch here as sometime this is expecting an error to be thrown by upstream
       const result = await (typeof out === 'undefined' ? item.callback(context) : item.callback(out, context));
 
       if (typeof result !== 'undefined') {
         out = result;
       }
+
+      index++;
     }
 
     return out;

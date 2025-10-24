@@ -188,7 +188,13 @@ export function useBaseApi(config, interceptors) {
         onSuccess?.(filteredData);
 
         // Run afterSend hooks (extensions can react to response)
-        await interceptorsRef.current.run('afterSend', undefined, {data: finalData, response: parsedData, result: stateRef.current.result, fullResponse});
+        await interceptorsRef.current.run('afterSend', undefined, {
+          data: finalData,
+          response: parsedData,
+          result: stateRef.current.result,
+          fullResponse,
+          filteredData,
+        });
 
         return filteredData;
       } catch (err) {

@@ -34,7 +34,8 @@ describe('usePagination', () => {
     test('accumulates results on send', async () => {
       global.fetch.mockResolvedValueOnce({
         ok: true,
-        json: async () => ({data: [{id: 1}, {id: 2}], hasMore: true}),
+        headers: new Headers({'Content-Type': 'application/json'}),
+        text: async () => JSON.stringify({data: [{id: 1}, {id: 2}], hasMore: true}),
       });
 
       const {result} = renderHook(() =>
@@ -68,10 +69,12 @@ describe('usePagination', () => {
 
         return {
           ok: true,
-          json: async () => ({
-            data: [{id: pageRequested}],
-            hasMore: pageRequested < 3,
-          }),
+          headers: new Headers({'Content-Type': 'application/json'}),
+          text: async () =>
+            JSON.stringify({
+              data: [{id: pageRequested}],
+              hasMore: pageRequested < 3,
+            }),
         };
       });
 
@@ -107,7 +110,8 @@ describe('usePagination', () => {
     test('stops loading when hasMore is false', async () => {
       global.fetch.mockResolvedValue({
         ok: true,
-        json: async () => ({data: [{id: 1}], hasMore: false}),
+        headers: new Headers({'Content-Type': 'application/json'}),
+        text: async () => JSON.stringify({data: [{id: 1}], hasMore: false}),
       });
 
       const {result} = renderHook(() =>
@@ -146,20 +150,24 @@ describe('usePagination', () => {
         if (!cursor) {
           return {
             ok: true,
-            json: async () => ({
-              data: [{id: 1}],
-              nextCursor: 'cursor-2',
-              hasMore: true,
-            }),
+            headers: new Headers({'Content-Type': 'application/json'}),
+            text: async () =>
+              JSON.stringify({
+                data: [{id: 1}],
+                nextCursor: 'cursor-2',
+                hasMore: true,
+              }),
           };
         } else if (cursor === 'cursor-2') {
           return {
             ok: true,
-            json: async () => ({
-              data: [{id: 2}],
-              nextCursor: null,
-              hasMore: false,
-            }),
+            headers: new Headers({'Content-Type': 'application/json'}),
+            text: async () =>
+              JSON.stringify({
+                data: [{id: 2}],
+                nextCursor: null,
+                hasMore: false,
+              }),
           };
         }
       });
@@ -199,7 +207,8 @@ describe('usePagination', () => {
     test('resetPagination clears results', async () => {
       global.fetch.mockResolvedValue({
         ok: true,
-        json: async () => ({data: [{id: 1}], hasMore: true}),
+        headers: new Headers({'Content-Type': 'application/json'}),
+        text: async () => JSON.stringify({data: [{id: 1}], hasMore: true}),
       });
 
       const {result} = renderHook(() =>
@@ -230,7 +239,8 @@ describe('usePagination', () => {
     test('refresh resets pagination', async () => {
       global.fetch.mockResolvedValue({
         ok: true,
-        json: async () => ({data: [{id: Math.random()}], hasMore: true}),
+        headers: new Headers({'Content-Type': 'application/json'}),
+        text: async () => JSON.stringify({data: [{id: Math.random()}], hasMore: true}),
       });
 
       const {result} = renderHook(() =>
@@ -246,14 +256,20 @@ describe('usePagination', () => {
         })
       );
 
-      // Load initial + more
+      // Load initial
       await act(async () => {
         await result.current.send();
+      });
+
+      const initialResults = result.current.result;
+      expect(result.current.result.length).toBe(1);
+
+      // sanity check for loading more
+      await act(async () => {
         await result.current.loadMore();
       });
 
-      const initialResults = result.current.results;
-      expect(initialResults.length).toBe(2);
+      expect(result.current.result.length).toBe(2);
 
       // Refresh should reset pagination
       await act(async () => {
@@ -261,8 +277,8 @@ describe('usePagination', () => {
       });
 
       // Should have replaced results, not appended
-      expect(result.current.results.length).toBe(1);
-      expect(result.current.results).not.toEqual(initialResults);
+      expect(result.current.result.length).toBe(1);
+      expect(result.current.result).not.toEqual(initialResults);
     });
   });
 
@@ -284,6 +300,8 @@ describe('usePagination', () => {
         })
       );
 
+      expect(result.current.isLoadingMore).toBe(false);
+
       // Start loadMore
       act(() => {
         result.current.loadMore();
@@ -291,11 +309,20 @@ describe('usePagination', () => {
 
       expect(result.current.isLoadingMore).toBe(true);
 
+      // important, tick it
+      await act(async () => {
+        await new Promise((r) => setTimeout(r, 0));
+      });
+
+      // NOW, resolveFetch should be a function
+      expect(resolveFetch).toBeInstanceOf(Function);
+
       // Resolve request
       await act(async () => {
         resolveFetch({
           ok: true,
-          json: async () => ({data: []}),
+          headers: new Headers({'Content-Type': 'application/json'}),
+          text: async () => JSON.stringify({data: []}),
         });
         await new Promise((r) => setTimeout(r, 10));
       });
@@ -308,7 +335,8 @@ describe('usePagination', () => {
     test('replaces results when empty', async () => {
       global.fetch.mockResolvedValue({
         ok: true,
-        json: async () => ({data: [{id: 1}]}),
+        headers: new Headers({'Content-Type': 'application/json'}),
+        text: async () => JSON.stringify({data: [{id: 1}]}),
       });
 
       const {result} = renderHook(() =>
@@ -335,7 +363,8 @@ describe('usePagination', () => {
         callCount++;
         return {
           ok: true,
-          json: async () => ({data: [{id: callCount}], reset: callCount === 2}),
+          headers: new Headers({'Content-Type': 'application/json'}),
+          text: async () => JSON.stringify({data: [{id: callCount}], reset: callCount === 2}),
         };
       });
 

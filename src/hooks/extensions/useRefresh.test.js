@@ -31,7 +31,8 @@ describe('useRefresh', () => {
     test('refresh() sends request with current data', async () => {
       global.fetch.mockResolvedValue({
         ok: true,
-        json: async () => ({data: 'refreshed'}),
+        headers: new Headers({'Content-Type': 'application/json'}),
+        text: async () => JSON.stringify({data: 'refreshed'}),
       });
 
       const {result} = renderHook(() =>
@@ -70,6 +71,8 @@ describe('useRefresh', () => {
         })
       );
 
+      expect(result.current.isRefreshing).toBe(false);
+
       // Start refresh
       act(() => {
         result.current.refresh();
@@ -77,11 +80,20 @@ describe('useRefresh', () => {
 
       expect(result.current.isRefreshing).toBe(true);
 
+      // important, tick it
+      await act(async () => {
+        await new Promise((r) => setTimeout(r, 0));
+      });
+
+      // NOW, resolveFetch should be a function
+      expect(resolveFetch).toBeInstanceOf(Function);
+
       // Resolve request
       await act(async () => {
         resolveFetch({
           ok: true,
-          json: async () => ({data: 'done'}),
+          headers: new Headers({'Content-Type': 'application/json'}),
+          text: async () => JSON.stringify({data: 'done'}),
         });
         await new Promise((r) => setTimeout(r, 10));
       });
@@ -118,7 +130,8 @@ describe('useRefresh', () => {
     test('refresh(true) resets state before fetching', async () => {
       global.fetch.mockResolvedValue({
         ok: true,
-        json: async () => ({data: 'new'}),
+        headers: new Headers({'Content-Type': 'application/json'}),
+        text: async () => JSON.stringify({data: 'new'}),
       });
 
       const {result} = renderHook(() =>
@@ -149,7 +162,8 @@ describe('useRefresh', () => {
     test('refresh(false) keeps current data', async () => {
       global.fetch.mockResolvedValue({
         ok: true,
-        json: async () => ({data: 'new'}),
+        headers: new Headers({'Content-Type': 'application/json'}),
+        text: async () => JSON.stringify({data: 'new'}),
       });
 
       const {result} = renderHook(() =>
@@ -180,7 +194,8 @@ describe('useRefresh', () => {
     test('onRefresh callback fires when refresh is triggered', async () => {
       global.fetch.mockResolvedValue({
         ok: true,
-        json: async () => ({data: 'test'}),
+        headers: new Headers({'Content-Type': 'application/json'}),
+        text: async () => JSON.stringify({data: 'test'}),
       });
 
       const onRefresh = jest.fn();
@@ -205,7 +220,8 @@ describe('useRefresh', () => {
     test('refresh resets pagination to page 1', async () => {
       global.fetch.mockResolvedValue({
         ok: true,
-        json: async () => ({data: [{id: Math.random()}], hasMore: true}),
+        headers: new Headers({'Content-Type': 'application/json'}),
+        text: async () => JSON.stringify({data: [{id: Math.random()}], hasMore: true}),
       });
 
       const {result} = renderHook(() =>
@@ -249,7 +265,8 @@ describe('useRefresh', () => {
     test('refresh:beforeSend hook fires before refresh', async () => {
       global.fetch.mockResolvedValue({
         ok: true,
-        json: async () => ({data: []}),
+        headers: new Headers({'Content-Type': 'application/json'}),
+        text: async () => JSON.stringify({data: []}),
       });
 
       let beforeSendFired = false;
@@ -257,7 +274,7 @@ describe('useRefresh', () => {
       const useCustomExtension = (interceptors, baseApi, config) => {
         if (!config) return {};
 
-        interceptors.add('refresh:beforeSend', 'custom', () => {
+        interceptors.replace('refresh:beforeSend', 'custom', () => {
           beforeSendFired = true;
         });
 
@@ -291,7 +308,8 @@ describe('useRefresh', () => {
         refreshCount++;
         return {
           ok: true,
-          json: async () => ({count: refreshCount}),
+          headers: new Headers({'Content-Type': 'application/json'}),
+          text: async () => JSON.stringify({count: refreshCount}),
         };
       });
 
@@ -307,13 +325,13 @@ describe('useRefresh', () => {
         await result.current.refresh();
       });
 
-      expect(result.current.response.count).toBe(1);
+      expect(result.current.result.count).toBe(1);
 
       await act(async () => {
         await result.current.refresh();
       });
 
-      expect(result.current.response.count).toBe(2);
+      expect(result.current.result.count).toBe(2);
     });
   });
 });

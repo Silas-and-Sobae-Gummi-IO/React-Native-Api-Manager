@@ -582,3 +582,159 @@ describe('InterceptorManager', () => {
     });
   });
 });
+
+  describe('replace() - Replacing hooks', () => {
+    beforeEach(() => {
+      mockClient = {config: {}, interceptors: null};
+      manager = new InterceptorManager(mockClient);
+    });
+
+    it('replaces an existing hook without warnings', () => {
+      const consoleSpy = jest.spyOn(console, 'warn').mockImplementation();
+      
+      manager.add('test:hook', () => 'first', 10, 'my-hook');
+      manager.replace('test:hook', 'my-hook', () => 'second', 10);
+
+      const hooks = manager.hooks.get('test:hook');
+      expect(hooks).toHaveLength(1);
+      expect(hooks[0].callback()).toBe('second');
+      expect(consoleSpy).not.toHaveBeenCalled();
+      
+      consoleSpy.mockRestore();
+    });
+
+    it('adds hook if it does not exist', () => {
+      manager.replace('test:hook', 'new-hook', () => 'value', 10);
+
+      const hooks = manager.hooks.get('test:hook');
+      expect(hooks).toHaveLength(1);
+      expect(hooks[0].name).toBe('new-hook');
+    });
+
+    it('throws error if name is not provided', () => {
+      expect(() => {
+        manager.replace('test:hook', null, () => {}, 10);
+      }).toThrow('replace() requires an explicit name');
+    });
+
+    it('maintains priority order after replacement', async () => {
+      manager.add('test:hook', (val) => val + 1, 5, 'hook1');
+      manager.add('test:hook', (val) => val * 2, 15, 'hook2');
+      manager.add('test:hook', (val) => val + 10, 10, 'hook3');
+
+      // Replace middle priority hook
+      manager.replace('test:hook', 'hook3', (val) => val + 20, 10);
+
+      const result = await manager.run('test:hook', 5);
+      // Order: hook1 (5), hook3 (10), hook2 (15)
+      // (5 + 1) + 20 = 26, then 26 * 2 = 52
+      expect(result).toBe(52);
+    });
+  });
+
+  describe('Dynamic hook registration during run() - WordPress-style', () => {
+    beforeEach(() => {
+      mockClient = {config: {}, interceptors: null};
+      manager = new InterceptorManager(mockClient);
+    });
+
+    it('hooks added during run DO execute in same run', async () => {
+      let executionOrder = [];
+
+      manager.add('test:hook', () => {
+        executionOrder.push('hook1');
+        // Add a new hook mid-run
+        manager.add('test:hook', () => {
+          executionOrder.push('dynamic-hook');
+        }, 15, 'dynamic');
+      }, 10, 'hook1');
+
+      manager.add('test:hook', () => {
+        executionOrder.push('hook2');
+      }, 20, 'hook2');
+
+      await manager.run('test:hook');
+
+      // NEW BEHAVIOR: dynamic-hook IS executed in this run!
+      expect(executionOrder).toEqual(['hook1', 'dynamic-hook', 'hook2']);
+    });
+
+    it('hooks removed during run do NOT execute', async () => {
+      let executionOrder = [];
+
+      manager.add('test:hook', () => {
+        executionOrder.push('hook1');
+        // Remove hook2 mid-run
+        manager.remove('test:hook', 'hook2');
+      }, 10, 'hook1');
+
+      manager.add('test:hook', () => {
+        executionOrder.push('hook2');
+      }, 20, 'hook2');
+
+      await manager.run('test:hook');
+
+      // NEW BEHAVIOR: hook2 does NOT execute (removed before its turn)
+      expect(executionOrder).toEqual(['hook1']);
+    });
+
+    it('priority changes during run DO affect execution order', async () => {
+      let executionOrder = [];
+
+      manager.add('test:hook', () => {
+        executionOrder.push('hook1');
+        // Change hook2's priority to run next (lower priority = earlier)
+        manager.replace('test:hook', 'hook2', () => {
+          executionOrder.push('hook2-high-priority');
+        }, 12); // Between hook1 (10) and hook3 (20)
+      }, 10, 'hook1');
+
+      manager.add('test:hook', () => {
+        executionOrder.push('hook2');
+      }, 25, 'hook2');
+
+      manager.add('test:hook', () => {
+        executionOrder.push('hook3');
+      }, 20, 'hook3');
+
+      await manager.run('test:hook');
+
+      // After hook1 runs at index 0, it replaces hook2 with priority 12
+      // The sorted list becomes: hook1(10), hook2-high-priority(12), hook3(20), old-hook2(25-removed)
+      // Index continues to 1, executes hook2-high-priority, then hook3
+      expect(executionOrder).toEqual(['hook1', 'hook2-high-priority', 'hook3']);
+    });
+
+    it('prevents infinite loops with max iteration guard', async () => {
+      // Simpler test: just check the guard throws after 1000 iterations
+      // by creating a situation where hooks keep getting added
+      for (let i = 0; i < 1500; i++) {
+        manager.add('test:hook', () => {}, 10, `hook-${i}`);
+      }
+
+      await expect(manager.run('test:hook')).rejects.toThrow(
+        'Hook "test:hook" exceeded 1000 iterations'
+      );
+    });
+
+    it('allows reasonable number of dynamic hooks without triggering guard', async () => {
+      let count = 0;
+      
+      manager.add('test:hook', () => {
+        count++;
+        // Add 50 more hooks dynamically (well under 1000 limit)
+        if (count === 1) {
+          for (let i = 0; i < 50; i++) {
+            manager.add('test:hook', () => {
+              count++;
+            }, 20 + i, `dynamic-${i}`);
+          }
+        }
+      }, 10, 'starter');
+
+      await manager.run('test:hook');
+
+      // Should execute: 1 starter + 50 dynamic = 51 total
+      expect(count).toBe(51);
+    });
+  });

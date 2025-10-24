@@ -24,9 +24,9 @@ export function useAutoFetch(interceptors, baseApi, config) {
   const {enabled = true, runOnMount = true, abortOnUnmount = false, condition, fetchData = {}, onAutoFetch} = config;
 
   // Register onMount hook to trigger send
-  interceptors.remove('onMount', 'autoFetch:onMount');
-  interceptors.add(
+  interceptors.replace(
     'onMount',
+    'autoFetch:onMount',
     async (context) => {
       if (!enabled || !runOnMount) return;
       // Check condition via interceptor (other extensions can override)
@@ -50,19 +50,17 @@ export function useAutoFetch(interceptors, baseApi, config) {
       // Trigger autoFetch:afterFetch hook
       await interceptors.run('autoFetch:afterFetch', undefined, {fetchData});
     },
-    10,
-    'autoFetch:onMount'
+    10
   );
 
-  interceptors.remove('onUnmount', 'autoFetch:onUnmount');
-  interceptors.add(
+  interceptors.replace(
     'onUnmount',
+    'autoFetch:onUnmount',
     async () => {
       if (!abortOnUnmount) return;
       baseApi.abort('unmount');
     },
-    10,
-    'autoFetch:onUnmount'
+    10
   );
 
   // No additional state or methods
