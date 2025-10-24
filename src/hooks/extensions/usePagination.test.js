@@ -280,6 +280,124 @@ describe('usePagination', () => {
       expect(result.current.result.length).toBe(1);
       expect(result.current.result).not.toEqual(initialResults);
     });
+
+    test('uses custom getResetData for page-based pagination', async () => {
+      const requestedData = [];
+      global.fetch.mockImplementation(async (url, options) => {
+        const body = JSON.parse(options.body || '{}');
+        requestedData.push(body);
+        return {
+          ok: true,
+          headers: new Headers({'Content-Type': 'application/json'}),
+          text: async () => JSON.stringify({data: [{id: body.page}], hasMore: true}),
+        };
+      });
+
+      const {result} = renderHook(() =>
+        useCoreApi({
+          client,
+          url: 'POST:/posts',
+          initialData: {page: 1},
+          pagination: {
+            pageKey: 'page',
+            getResetData: (currentData) => ({...currentData, page: 1}),
+            extractResults: (r) => r.data,
+            hasMoreFn: (r) => r.hasMore,
+          },
+          refresh: true,
+        })
+      );
+
+      // Initial load (page 1)
+      await act(async () => {
+        await result.current.send();
+      });
+
+      // Load more (page 2)
+      await act(async () => {
+        await result.current.loadMore();
+      });
+
+      expect(requestedData).toContainEqual(expect.objectContaining({page: 1}));
+      expect(requestedData).toContainEqual(expect.objectContaining({page: 2}));
+
+      // Refresh should reset to page 1
+      await act(async () => {
+        await result.current.refresh();
+      });
+
+      // Last request should be page 1 again
+      expect(requestedData[requestedData.length - 1]).toEqual(expect.objectContaining({page: 1}));
+    });
+
+    test('uses custom getResetData for cursor-based pagination', async () => {
+      const requestedData = [];
+      global.fetch.mockImplementation(async (url, options) => {
+        const body = JSON.parse(options.body || '{}');
+        requestedData.push(body);
+
+        if (!body.cursor) {
+          return {
+            ok: true,
+            headers: new Headers({'Content-Type': 'application/json'}),
+            text: async () =>
+              JSON.stringify({
+                data: [{id: 1}],
+                nextCursor: 'cursor-2',
+                hasMore: true,
+              }),
+          };
+        } else {
+          return {
+            ok: true,
+            headers: new Headers({'Content-Type': 'application/json'}),
+            text: async () =>
+              JSON.stringify({
+                data: [{id: 2}],
+                nextCursor: 'cursor-3',
+                hasMore: true,
+              }),
+          };
+        }
+      });
+
+      const {result} = renderHook(() =>
+        useCoreApi({
+          client,
+          url: 'POST:/posts',
+          pagination: {
+            getNextPageData: (currentData, lastResponse) => ({
+              cursor: lastResponse?.nextCursor,
+            }),
+            getResetData: (currentData) => ({cursor: null}),
+            extractResults: (r) => r.data,
+            hasMoreFn: (r) => r.hasMore,
+          },
+          refresh: true,
+        })
+      );
+
+      // Initial load (no cursor)
+      await act(async () => {
+        await result.current.send();
+      });
+
+      // Load more (cursor-2)
+      await act(async () => {
+        await result.current.loadMore();
+      });
+
+      expect(requestedData[0]).toEqual({});
+      expect(requestedData[1]).toEqual({cursor: 'cursor-2'});
+
+      // Refresh should reset cursor to null
+      await act(async () => {
+        await result.current.refresh();
+      });
+
+      // Last request should have null cursor
+      expect(requestedData[requestedData.length - 1]).toEqual({cursor: null});
+    });
   });
 
   describe('Loading states', () => {
@@ -393,6 +511,129 @@ describe('usePagination', () => {
 
       // Should replace (not append)
       expect(result.current.results).toEqual([{id: 2}]);
+    });
+  });
+
+  describe('refresh:overwriteData hook integration', () => {
+    test('integrates with useRefresh via refresh:overwriteData hook', async () => {
+      const requestedData = [];
+      global.fetch.mockImplementation(async (url, options) => {
+        const body = JSON.parse(options.body || '{}');
+        requestedData.push(body);
+        return {
+          ok: true,
+          headers: new Headers({'Content-Type': 'application/json'}),
+          text: async () => JSON.stringify({data: [{id: body.page || 1}], hasMore: true}),
+        };
+      });
+
+      const {result} = renderHook(() =>
+        useCoreApi({
+          client,
+          url: 'POST:/posts',
+          initialData: {page: 1, filter: 'active'},
+          pagination: {
+            pageKey: 'page',
+            getResetData: (currentData) => ({...currentData, page: 1}),
+            extractResults: (r) => r.data,
+            hasMoreFn: (r) => r.hasMore,
+          },
+          refresh: true,
+        })
+      );
+
+      // Initial load
+      await act(async () => {
+        await result.current.send();
+      });
+
+      // Load page 2
+      await act(async () => {
+        await result.current.loadMore();
+      });
+
+      expect(requestedData).toContainEqual(expect.objectContaining({page: 1, filter: 'active'}));
+      expect(requestedData).toContainEqual(expect.objectContaining({page: 2, filter: 'active'}));
+
+      // Refresh should call refresh:overwriteData which calls getResetData
+      await act(async () => {
+        await result.current.refresh();
+      });
+
+      // Should have reset to page 1 but kept other data (filter)
+      const lastRequest = requestedData[requestedData.length - 1];
+      expect(lastRequest).toEqual({page: 1, filter: 'active'});
+    });
+
+    test('refresh:overwriteData works with cursor pagination', async () => {
+      const requestedData = [];
+      global.fetch.mockImplementation(async (url, options) => {
+        const body = JSON.parse(options.body || '{}');
+        requestedData.push(body);
+
+        if (!body.cursor) {
+          return {
+            ok: true,
+            headers: new Headers({'Content-Type': 'application/json'}),
+            text: async () =>
+              JSON.stringify({
+                data: [{id: 1}],
+                nextCursor: 'cursor-2',
+                hasMore: true,
+              }),
+          };
+        } else {
+          return {
+            ok: true,
+            headers: new Headers({'Content-Type': 'application/json'}),
+            text: async () =>
+              JSON.stringify({
+                data: [{id: 2}],
+                nextCursor: null,
+                hasMore: false,
+              }),
+          };
+        }
+      });
+
+      const {result} = renderHook(() =>
+        useCoreApi({
+          client,
+          url: 'POST:/posts',
+          initialData: {status: 'published'},
+          pagination: {
+            getNextPageData: (currentData, lastResponse) => ({
+              ...currentData,
+              cursor: lastResponse?.nextCursor,
+            }),
+            getResetData: (currentData) => ({...currentData, cursor: null}),
+            extractResults: (r) => r.data,
+            hasMoreFn: (r) => r.hasMore,
+          },
+          refresh: true,
+        })
+      );
+
+      // Initial load
+      await act(async () => {
+        await result.current.send();
+      });
+
+      // Load more
+      await act(async () => {
+        await result.current.loadMore();
+      });
+
+      expect(requestedData[0]).toEqual({status: 'published'});
+      expect(requestedData[1]).toEqual({status: 'published', cursor: 'cursor-2'});
+
+      // Refresh should reset cursor
+      await act(async () => {
+        await result.current.refresh();
+      });
+
+      // Should preserve status but reset cursor
+      expect(requestedData[requestedData.length - 1]).toEqual({status: 'published', cursor: null});
     });
   });
 });

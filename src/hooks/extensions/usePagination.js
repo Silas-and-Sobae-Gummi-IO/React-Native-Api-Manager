@@ -32,10 +32,6 @@ export function usePagination(interceptors, baseApi, config) {
     onLoadMore,
   } = config;
 
-  // Use baseApi.result for accumulated results
-  // Keep local state as fallback for non-persist usage
-  const results = baseApi.result || [];
-
   // Ensure result is initialized as empty array if null
   useEffect(() => {
     if (baseApi.result === null) {
@@ -179,7 +175,7 @@ export function usePagination(interceptors, baseApi, config) {
 
   return {
     // Pagination state
-    results,
+    results: baseApi.result,
     hasMore,
     isLoadingMore,
 

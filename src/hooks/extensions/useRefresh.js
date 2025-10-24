@@ -39,8 +39,7 @@ export function useRefresh(interceptors, baseApi, config) {
         baseApi.reset();
       }
 
-      // @TODO need test
-      const overwriteData = await interceptors.run('refresh:sendData', {}, {resetData});
+      const overwriteData = await interceptors.run('refresh:overwriteData', {}, {resetData});
 
       // Send request with current data
       const result = await baseApi.send(overwriteData);
