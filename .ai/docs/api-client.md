@@ -5,11 +5,11 @@ A modern, framework-agnostic HTTP client built on an interceptor-based architect
 ## Quick Start
 
 ```js path=null start=null
-import ApiClient from './src/client/ApiClient';
+import ApiClient from './src/client/core/ApiClient';
 
-const client = new ApiClient({ 
+const client = new ApiClient({
   baseURL: 'https://api.example.com',
-  headers: { authorization: 'Bearer token123' }
+  headers: {authorization: 'Bearer token123'},
 });
 
 const users = await client.get('/users').send();
@@ -26,41 +26,41 @@ Applied to all requests made by the client instance:
 ```js path=null start=null
 const client = new ApiClient({
   baseURL: 'https://api.example.com',
-  
+
   // Default headers for all requests
   headers: {
-    'authorization': 'Bearer token',
-    'x-api-version': 'v2'
+    authorization: 'Bearer token',
+    'x-api-version': 'v2',
   },
-  
+
   // Default body properties (plain object only)
-  body: { 
-    is_super_admin: true  // Merged with each POST/PUT/PATCH body
+  body: {
+    is_super_admin: true, // Merged with each POST/PUT/PATCH body
   },
-  
+
   // Request timeout in milliseconds
   timeout: 5000,
-  
+
   // Debug logging
-  debug: { 
-    enable: true, 
-    scope: '*'  // Or ['users', 'auth'] to filter
+  debug: {
+    enable: true,
+    scope: '*', // Or ['users', 'auth'] to filter
   },
-  
+
   // Auto-fix malformed JSON responses
   autoFixJson: true,
-  
+
   // Global status handlers
   onStatus: {
     401: (response) => redirectToLogin(),
-    404: () => null
+    404: () => null,
   },
-  
+
   // Add/remove interceptors
   interceptors: [
-    AuthInterceptor,      // Custom interceptor
-    '-logger'             // Remove built-in logger
-  ]
+    AuthInterceptor, // Custom interceptor
+    '-logger', // Remove built-in logger
+  ],
 });
 ```
 
@@ -71,27 +71,27 @@ Override client config for specific requests:
 ```js path=null start=null
 await client.get('/users', {
   // Add/override headers
-  headers: { 'x-custom': 'value' },
-  
+  headers: {'x-custom': 'value'},
+
   // Query parameters
-  params: { page: 1, limit: 20 },
-  
+  params: {page: 1, limit: 20},
+
   // Override baseURL
   baseURL: 'https://other-api.com',
-  
+
   // Override timeout
   timeout: 10000,
-  
+
   // Cancel previous request with same key
   cancelKey: 'search',
-  
+
   // Per-request status handlers
   onStatus: {
-    304: () => getCachedData()
+    304: () => getCachedData(),
   },
-  
+
   // Override autoFixJson
-  autoFixJson: false
+  autoFixJson: false,
 });
 ```
 
@@ -104,16 +104,16 @@ await client.get('/users', {
 ```js path=null start=null
 // GET
 await client.get('/users').send();
-await client.get('/users', { params: { page: 1 } }).send();
+await client.get('/users', {params: {page: 1}}).send();
 
 // POST (with body)
-await client.post('/users', { name: 'John', email: 'john@example.com' }).send();
+await client.post('/users', {name: 'John', email: 'john@example.com'}).send();
 
 // PUT
-await client.put('/users/123', { name: 'Jane' }).send();
+await client.put('/users/123', {name: 'Jane'}).send();
 
 // PATCH
-await client.patch('/users/123', { email: 'new@example.com' }).send();
+await client.patch('/users/123', {email: 'new@example.com'}).send();
 
 // DELETE
 await client.delete('/users/123').send();
@@ -123,7 +123,7 @@ await client.delete('/users/123').send();
 
 ```js path=null start=null
 // Same as client.post('/users', { name: 'John' }).send()
-await client.request('POST:/users', { name: 'John' });
+await client.request('POST:/users', {name: 'John'});
 
 // Same as client.get('/users?page=1').send()
 await client.request('GET:/users?page=1');
@@ -133,13 +133,15 @@ await client.request('GET:/users?page=1');
 
 ```js path=null start=null
 // Automatic serialization
-await client.get('/search', {
-  params: { 
-    q: 'react', 
-    page: 1, 
-    tags: ['js', 'frontend']  // Array handling
-  }
-}).send();
+await client
+  .get('/search', {
+    params: {
+      q: 'react',
+      page: 1,
+      tags: ['js', 'frontend'], // Array handling
+    },
+  })
+  .send();
 
 // Result: /search?q=react&page=1&tags=js&tags=frontend
 ```
@@ -169,13 +171,13 @@ Perfect for search autocomplete or debouncing:
 
 ```js path=null start=null
 // User types "abc" quickly - only last request completes
-client.get('/search', { cancelKey: 'search', params: { q: 'a' } });
-client.get('/search', { cancelKey: 'search', params: { q: 'ab' } });  // Cancels first
-client.get('/search', { cancelKey: 'search', params: { q: 'abc' } }); // Cancels second
+client.get('/search', {cancelKey: 'search', params: {q: 'a'}});
+client.get('/search', {cancelKey: 'search', params: {q: 'ab'}}); // Cancels first
+client.get('/search', {cancelKey: 'search', params: {q: 'abc'}}); // Cancels second
 
 // Latest request wins - requests 1-4 get aborted
 for (let i = 1; i <= 5; i++) {
-  client.get('/api', { cancelKey: 'same-key' }).send();
+  client.get('/api', {cancelKey: 'same-key'}).send();
 }
 // Only request #5 completes
 ```
@@ -183,10 +185,10 @@ for (let i = 1; i <= 5; i++) {
 ### Body Override at Send Time
 
 ```js path=null start=null
-const request = client.post('/users', { name: 'Initial' });
+const request = client.post('/users', {name: 'Initial'});
 
 // Override body properties when sending
-await request.send({ name: 'Updated', email: 'new@example.com' });
+await request.send({name: 'Updated', email: 'new@example.com'});
 ```
 
 ---
@@ -198,16 +200,18 @@ await request.send({ name: 'Updated', email: 'new@example.com' });
 Auto-detects React Native file objects:
 
 ```js path=null start=null
-const file = { 
-  uri: 'file:///path/to/image.jpg', 
-  name: 'photo.jpg', 
-  type: 'image/jpeg' 
+const file = {
+  uri: 'file:///path/to/image.jpg',
+  name: 'photo.jpg',
+  type: 'image/jpeg',
 };
 
-await client.post('/upload', { 
-  userId: 123,
-  photo: file 
-}).send();
+await client
+  .post('/upload', {
+    userId: 123,
+    photo: file,
+  })
+  .send();
 ```
 
 ### Web/Browser
@@ -228,16 +232,19 @@ Execute custom logic for specific HTTP status codes:
 
 ```js path=null start=null
 // Per-request
-const user = await client.get('/users/1', {
-  onStatus: {
-    304: () => getCachedUser(1),      // Not Modified - return cached
-    404: () => null,                   // Not Found - return null instead of error
-    403: (response) => {               // Forbidden - custom handling
-      showPermissionError();
-      return null;
-    }
-  }
-}).send();
+const user = await client
+  .get('/users/1', {
+    onStatus: {
+      304: () => getCachedUser(1), // Not Modified - return cached
+      404: () => null, // Not Found - return null instead of error
+      403: (response) => {
+        // Forbidden - custom handling
+        showPermissionError();
+        return null;
+      },
+    },
+  })
+  .send();
 
 // Client-level (all requests)
 const client = new ApiClient({
@@ -246,8 +253,8 @@ const client = new ApiClient({
     401: (response) => {
       redirectToLogin();
       throw new Error('Unauthorized');
-    }
-  }
+    },
+  },
 });
 ```
 
@@ -259,7 +266,7 @@ const client = new ApiClient({
 
 ```js path=null start=null
 const client = new ApiClient({
-  debug: { enable: true, scope: '*' }
+  debug: {enable: true, scope: '*'},
 });
 
 await client.get('/users').send();
@@ -272,10 +279,10 @@ await client.get('/users').send();
 
 ```js path=null start=null
 const client = new ApiClient({
-  debug: { 
-    enable: true, 
-    scope: ['users', 'auth']  // Only log these endpoints
-  }
+  debug: {
+    enable: true,
+    scope: ['users', 'auth'], // Only log these endpoints
+  },
 });
 ```
 
@@ -283,7 +290,7 @@ const client = new ApiClient({
 
 ```js path=null start=null
 const client = new ApiClient({
-  debug: true  // Same as { enable: true, scope: '*' }
+  debug: true, // Same as { enable: true, scope: '*' }
 });
 ```
 
@@ -297,21 +304,21 @@ const client = new ApiClient({
 try {
   await client.get('/not-found').send();
 } catch (error) {
-  console.log(error.message);   // "Request failed with status code 404"
-  console.log(error.status);    // 404
-  console.log(error.config);    // Request config object
-  console.log(error.response);  // { data, status, headers }
+  console.log(error.message); // "Request failed with status code 404"
+  console.log(error.status); // 404
+  console.log(error.config); // Request config object
+  console.log(error.response); // { data, status, headers }
 }
 ```
 
 ### Suppress Specific Errors
 
 ```js path=null start=null
-import { BaseInterceptor } from './src/client/interceptors/BaseInterceptor';
+import {BaseInterceptor} from './src/client/interceptors/BaseInterceptor';
 
 class SuppressInterceptor extends BaseInterceptor {
   static name = 'suppress';
-  
+
   register() {
     this._manager.add('request:suppressError', 'suppress:404', (shouldSuppress, ctx) => {
       return ctx.error.status === 404;
@@ -320,7 +327,7 @@ class SuppressInterceptor extends BaseInterceptor {
 }
 
 const client = new ApiClient({
-  interceptors: [SuppressInterceptor]
+  interceptors: [SuppressInterceptor],
 });
 
 const result = await client.get('/maybe-exists').send();
@@ -342,15 +349,15 @@ const client = new ApiClient({
     auth: {
       // Trigger on 401 errors
       shouldRetry: (error) => error.status === 401,
-      
+
       // Refresh token and retry
       handler: async (error, context) => {
         const newToken = await refreshAuthToken();
         // Update client headers for subsequent requests
         context.client.config.headers.authorization = `Bearer ${newToken}`;
-      }
-    }
-  }
+      },
+    },
+  },
 });
 
 // First request gets 401, token refreshes, request retries automatically
@@ -364,13 +371,13 @@ const client = new ApiClient({
   recovery: {
     auth: {
       shouldRetry: (error) => error.status === 401,
-      handler: async () => await refreshToken()
+      handler: async () => await refreshToken(),
     },
     device: {
       shouldRetry: (error) => error.status === 403,
-      handler: async () => await registerDevice()
-    }
-  }
+      handler: async () => await registerDevice(),
+    },
+  },
 });
 ```
 
@@ -382,9 +389,9 @@ const client = new ApiClient({
     auth: {
       shouldRetry: (error) => error.status === 401,
       handler: async () => await refreshToken(),
-      abortOnFailure: true  // Default: fail paused requests if handler fails
-    }
-  }
+      abortOnFailure: true, // Default: fail paused requests if handler fails
+    },
+  },
 });
 ```
 
@@ -392,11 +399,13 @@ const client = new ApiClient({
 
 ```js path=null start=null
 // Skip recovery for public endpoints
-await client.get('/public', {
-  recovery: {
-    auth: { enable: false }
-  }
-}).send();
+await client
+  .get('/public', {
+    recovery: {
+      auth: {enable: false},
+    },
+  })
+  .send();
 ```
 
 ### How It Works
@@ -420,30 +429,30 @@ Interceptors let you hook into the request/response lifecycle.
 ### Basic Auth Interceptor
 
 ```js path=null start=null
-import { BaseInterceptor } from './src/client/interceptors/BaseInterceptor';
+import {BaseInterceptor} from './src/client/interceptors/BaseInterceptor';
 
 class AuthInterceptor extends BaseInterceptor {
   static name = 'auth';
-  
+
   register() {
     this._manager.add(
-      'request:prepareConfig', 
-      'auth:token', 
-      this._addAuth.bind(this), 
-      5  // Priority
+      'request:prepareConfig',
+      'auth:token',
+      this._addAuth.bind(this),
+      5 // Priority
     );
   }
-  
+
   _addAuth(config) {
     return {
       ...config,
       headers: {
         ...config.headers,
-        authorization: `Bearer ${this._getToken()}`
-      }
+        authorization: `Bearer ${this._getToken()}`,
+      },
     };
   }
-  
+
   _getToken() {
     return localStorage.getItem('token');
   }
@@ -451,7 +460,7 @@ class AuthInterceptor extends BaseInterceptor {
 
 const client = new ApiClient({
   baseURL: 'https://api.example.com',
-  interceptors: [AuthInterceptor]
+  interceptors: [AuthInterceptor],
 });
 ```
 
@@ -460,26 +469,21 @@ const client = new ApiClient({
 ```js path=null start=null
 class CustomInterceptor extends BaseInterceptor {
   static name = 'custom';
-  
+
   static defaultConfig = {
     enable: false,
-    prefix: 'Bearer'
+    prefix: 'Bearer',
   };
-  
+
   configKey = 'custom';
-  
+
   register() {
     // Enable boolean shorthand (custom: true)
     this._useShorthandConfig('custom');
-    
-    this._manager.add(
-      'request:beforeRequest', 
-      'custom:log', 
-      this._log.bind(this), 
-      10
-    );
+
+    this._manager.add('request:beforeRequest', 'custom:log', this._log.bind(this), 10);
   }
-  
+
   _log(context) {
     const config = context.config.custom;
     if (config.enable) {
@@ -490,15 +494,15 @@ class CustomInterceptor extends BaseInterceptor {
 
 // Usage
 const client = new ApiClient({
-  custom: true  // Uses defaults
+  custom: true, // Uses defaults
 });
 
 // Or with custom config
 const client = new ApiClient({
   custom: {
     enable: true,
-    prefix: 'Token'
-  }
+    prefix: 'Token',
+  },
 });
 ```
 
@@ -510,16 +514,16 @@ const client = new ApiClient({
 
 ```js path=null start=null
 const client = new ApiClient({
-  cache: true  // Enable with defaults (5min TTL)
+  cache: true, // Enable with defaults (5min TTL)
 });
 
 // Or with custom config
 const client = new ApiClient({
   cache: {
     enable: true,
-    ttl: 60000,              // 1 minute
-    invalidateOn: ['POST', 'PUT', 'PATCH', 'DELETE']
-  }
+    ttl: 60000, // 1 minute
+    invalidateOn: ['POST', 'PUT', 'PATCH', 'DELETE'],
+  },
 });
 ```
 
@@ -527,7 +531,7 @@ const client = new ApiClient({
 
 ```js path=null start=null
 const client = new ApiClient({
-  metrics: true  // Track request duration, size, etc.
+  metrics: true, // Track request duration, size, etc.
 });
 
 await client.get('/users').send();
@@ -542,13 +546,13 @@ const client = new ApiClient({
     enable: true,
     maxAttempts: 3,
     methods: ['GET', 'HEAD', 'PUT', 'DELETE', 'OPTIONS'],
-    retryOn: [408, 429, 500, 502, 503, 504],  // Status codes
+    retryOn: [408, 429, 500, 502, 503, 504], // Status codes
     backoff: {
-      type: 'exponential',  // or 'fixed'
-      base: 1000,           // 1s, 2s, 4s...
-      jitter: 'full'        // Randomize timing
-    }
-  }
+      type: 'exponential', // or 'fixed'
+      base: 1000, // 1s, 2s, 4s...
+      jitter: 'full', // Randomize timing
+    },
+  },
 });
 ```
 
@@ -559,13 +563,13 @@ const client = new ApiClient({
   rateLimit: {
     enable: true,
     maxRequests: 10,
-    window: 1000,           // 10 requests per second
-    strategy: 'sliding',    // or 'fixed'
-    scope: 'global',        // or 'per-endpoint'
+    window: 1000, // 10 requests per second
+    strategy: 'sliding', // or 'fixed'
+    scope: 'global', // or 'per-endpoint'
     onRateLimit: (waitTimeMs) => {
       console.log(`Queued for ${waitTimeMs}ms`);
-    }
-  }
+    },
+  },
 });
 ```
 
@@ -578,13 +582,13 @@ const client = new ApiClient({
 ```js path=null start=null
 // Useful for adding metadata to all requests
 const client = new ApiClient({
-  body: { 
+  body: {
     app_version: '2.1.0',
-    device_id: getDeviceId()
-  }
+    device_id: getDeviceId(),
+  },
 });
 
-await client.post('/events', { event_type: 'click' }).send();
+await client.post('/events', {event_type: 'click'}).send();
 // Sends: { app_version: '2.1.0', device_id: '...', event_type: 'click' }
 ```
 
@@ -593,17 +597,17 @@ await client.post('/events', { event_type: 'click' }).send();
 ```js path=null start=null
 const client = new ApiClient({
   interceptors: [
-    '-logger',      // Remove logging
-    '-cache',       // Remove caching
-    AuthInterceptor // Add custom
-  ]
+    '-logger', // Remove logging
+    '-cache', // Remove caching
+    AuthInterceptor, // Add custom
+  ],
 });
 ```
 
 ### Dynamic Config Updates
 
 ```js path=null start=null
-const client = new ApiClient({ baseURL: 'https://api.example.com' });
+const client = new ApiClient({baseURL: 'https://api.example.com'});
 
 // Update client config
 client.config.headers.authorization = `Bearer ${newToken}`;
@@ -611,7 +615,7 @@ client.config.headers.authorization = `Bearer ${newToken}`;
 // Or create new instance for different auth
 const adminClient = new ApiClient({
   baseURL: 'https://api.example.com',
-  headers: { authorization: `Bearer ${adminToken}` }
+  headers: {authorization: `Bearer ${adminToken}`},
 });
 ```
 
@@ -627,18 +631,18 @@ const response = await fetch('https://api.example.com/users', {
   method: 'POST',
   headers: {
     'Content-Type': 'application/json',
-    'Authorization': 'Bearer token'
+    Authorization: 'Bearer token',
   },
-  body: JSON.stringify({ name: 'John' })
+  body: JSON.stringify({name: 'John'}),
 });
 const data = await response.json();
 
 // After
-const client = new ApiClient({ 
+const client = new ApiClient({
   baseURL: 'https://api.example.com',
-  headers: { authorization: 'Bearer token' }
+  headers: {authorization: 'Bearer token'},
 });
-const data = await client.post('/users', { name: 'John' }).send();
+const data = await client.post('/users', {name: 'John'}).send();
 ```
 
 ### From v1 Hook Names
@@ -703,7 +707,7 @@ Make sure you're passing FormData at request time, not client level:
 ```js path=null start=null
 // ❌ Don't do this
 const client = new ApiClient({
-  body: new FormData()  // Will throw error
+  body: new FormData(), // Will throw error
 });
 
 // ✅ Do this
@@ -718,8 +722,8 @@ Headers merge, not replace. To remove a header, set it to `undefined`:
 ```js path=null start=null
 await client.get('/users', {
   headers: {
-    authorization: undefined  // Remove client-level auth header
-  }
+    authorization: undefined, // Remove client-level auth header
+  },
 });
 ```
 
@@ -729,13 +733,13 @@ Check scope filter:
 
 ```js path=null start=null
 const client = new ApiClient({
-  debug: { 
-    enable: true, 
-    scope: '*'  // Must include '*' or specific endpoint
-  }
+  debug: {
+    enable: true,
+    scope: '*', // Must include '*' or specific endpoint
+  },
 });
 ```
 
 ---
 
-*Last Updated: October 2025*
+_Last Updated: October 2025_

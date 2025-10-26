@@ -1,6 +1,6 @@
 import {useState, useRef, useEffect, useCallback} from 'react';
-import {ApiClient} from '../client/ApiClient';
-import {InterceptorManager} from '../client/lib/InterceptorManager';
+import {ApiClient} from '../client/core/ApiClient';
+import {InterceptorManager} from '../client/managers/InterceptorManager';
 
 function useLatestRef(value) {
   const ref = useRef(value);
@@ -83,24 +83,21 @@ export function useBaseApi(config, interceptors) {
 
   // Lifecycle hooks: onMount and onUnmount
   useEffect(() => {
-    (async () => {
-      await interceptorsRef.current.run('onMount', undefined, {
+    interceptorsRef.current.run('onMount', undefined, {
+      data,
+      response,
+      error,
+      isLoading,
+    }).catch(console.error);
+
+    return () => {
+      // Cleanup can't be async, but we should handle errors
+      interceptorsRef.current.run('onUnmount', undefined, {
         data,
         response,
         error,
         isLoading,
-      });
-    })();
-
-    return () => {
-      (async () => {
-        await interceptorsRef.current.run('onUnmount', undefined, {
-          data,
-          response,
-          error,
-          isLoading,
-        });
-      })();
+      }).catch(console.error);
     };
   }, []); // Empty deps - run once on mount/unmount
 

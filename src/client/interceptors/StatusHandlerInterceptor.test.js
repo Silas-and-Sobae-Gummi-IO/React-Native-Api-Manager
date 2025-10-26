@@ -1,7 +1,7 @@
 // src/client/interceptors/StatusHandlerInterceptor.test.js
 
 import {StatusHandlerInterceptor} from './StatusHandlerInterceptor';
-import {ApiClient} from '../ApiClient';
+import {ApiClient} from '../core/ApiClient';
 
 describe('StatusHandlerInterceptor', () => {
   let mockFetch;
@@ -31,7 +31,7 @@ describe('StatusHandlerInterceptor', () => {
 
   it('calls custom onStatus handler for matching status code', async () => {
     const handler = jest.fn(() => ({custom: 'response'}));
-    
+
     mockFetch.mockResolvedValueOnce({
       ok: false,
       status: 422,
@@ -40,9 +40,13 @@ describe('StatusHandlerInterceptor', () => {
     });
 
     const client = new ApiClient();
-    const request = client.post('https://api.example.com/users', {email: 'bad'}, {
-      onStatus: {422: handler},
-    });
+    const request = client.post(
+      'https://api.example.com/users',
+      {email: 'bad'},
+      {
+        onStatus: {422: handler},
+      }
+    );
 
     const result = await request.send();
 

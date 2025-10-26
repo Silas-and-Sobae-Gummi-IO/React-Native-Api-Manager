@@ -1,4 +1,4 @@
-// src/client/ApiClient.expert.test.js
+// src/client/core/ApiClient.expert.test.js
 
 import {ApiClient} from './ApiClient';
 

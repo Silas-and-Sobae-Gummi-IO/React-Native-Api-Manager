@@ -1,8 +1,8 @@
-// src/client/ApiClient.js
+// src/client/core/ApiClient.js
 
-import {InterceptorManager} from './lib/InterceptorManager';
-import {parseShorthandUrl} from '../utils/parser';
-import {CoreInterceptor} from './interceptors/CoreInterceptor';
+import {InterceptorManager} from '../managers/InterceptorManager';
+import {parseShorthandUrl} from '../../utils/parser';
+import {CoreInterceptor} from '../interceptors/CoreInterceptor';
 import {ApiRequest} from './ApiRequest';
 
 export class ApiClient {
@@ -11,7 +11,7 @@ export class ApiClient {
     if (config.body && config.body instanceof FormData) {
       throw new Error('Client-level body cannot be FormData. Use plain objects only.');
     }
-    
+
     this.config = config;
     this.interceptors = new InterceptorManager(this);
 

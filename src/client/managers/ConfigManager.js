@@ -150,10 +150,9 @@ export class ConfigManager {
     if (bodyOverrides instanceof FormData) {
       // FormData replaces everything, can't merge
       finalBody = bodyOverrides;
-    } else if (typeof bodyOverrides === 'object' && bodyOverrides !== null && Object.keys(bodyOverrides).length > 0) {
+    } else if (bodyOverrides && typeof bodyOverrides === 'object' && Object.keys(bodyOverrides).length > 0) {
+      // Fixed: Check bodyOverrides is truthy before Object.keys() to avoid null/undefined errors
       finalBody = {...(finalBody || {}), ...bodyOverrides};
-    } else if (bodyOverrides !== undefined && bodyOverrides !== null && Object.keys(bodyOverrides || {}).length > 0) {
-      finalBody = bodyOverrides;
     }
 
     return finalBody;

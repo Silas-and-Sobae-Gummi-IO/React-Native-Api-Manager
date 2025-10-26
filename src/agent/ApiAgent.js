@@ -1,4 +1,4 @@
-import {ApiClient} from '../client/ApiClient';
+import {ApiClient} from '../client/core/ApiClient';
 
 /**
  * ApiAgent - Central manager for multiple ApiClient instances

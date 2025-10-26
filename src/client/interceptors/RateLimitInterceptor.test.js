@@ -1,7 +1,7 @@
 // src/client/interceptors/RateLimitInterceptor.test.js
 
 import {RateLimitInterceptor} from './RateLimitInterceptor';
-import {ApiClient} from '../ApiClient';
+import {ApiClient} from '../core/ApiClient';
 
 describe('RateLimitInterceptor', () => {
   let mockFetch;

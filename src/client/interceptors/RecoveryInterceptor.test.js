@@ -1,5 +1,5 @@
 import {RecoveryInterceptor} from './RecoveryInterceptor';
-import {ApiClient} from '../ApiClient';
+import {ApiClient} from '../core/ApiClient';
 
 describe('RecoveryInterceptor', () => {
   let mockFetch;
@@ -8,14 +8,14 @@ describe('RecoveryInterceptor', () => {
     ok: true,
     status: 200,
     headers: new Map([['content-type', 'application/json']]),
-    text: async () => JSON.stringify(data)
+    text: async () => JSON.stringify(data),
   });
 
   const mockError = (status, data) => ({
     ok: false,
     status,
     headers: new Map([['content-type', 'application/json']]),
-    text: async () => JSON.stringify(data)
+    text: async () => JSON.stringify(data),
   });
 
   beforeEach(() => {
@@ -29,19 +29,17 @@ describe('RecoveryInterceptor', () => {
 
   test('object-based config works with named handlers', async () => {
     const authHandler = jest.fn().mockResolvedValue();
-    
-    mockFetch
-      .mockResolvedValueOnce(mockError(401, {error: 'Unauthorized'}))
-      .mockResolvedValueOnce(mockSuccess({data: 'success'}));
+
+    mockFetch.mockResolvedValueOnce(mockError(401, {error: 'Unauthorized'})).mockResolvedValueOnce(mockSuccess({data: 'success'}));
 
     const client = new ApiClient({
       baseURL: 'https://api.test.com',
       recovery: {
         auth: {
           shouldRetry: (error) => error.status === 401,
-          handler: authHandler
-        }
-      }
+          handler: authHandler,
+        },
+      },
     });
 
     const result = await client.get('/test').send();
@@ -53,10 +51,8 @@ describe('RecoveryInterceptor', () => {
 
   test('enables handlers by default', async () => {
     const handler = jest.fn().mockResolvedValue();
-    
-    mockFetch
-      .mockResolvedValueOnce(mockError(401, {error: 'Unauthorized'}))
-      .mockResolvedValueOnce(mockSuccess({data: 'success'}));
+
+    mockFetch.mockResolvedValueOnce(mockError(401, {error: 'Unauthorized'})).mockResolvedValueOnce(mockSuccess({data: 'success'}));
 
     const client = new ApiClient({
       baseURL: 'https://api.test.com',
@@ -64,9 +60,9 @@ describe('RecoveryInterceptor', () => {
         auth: {
           // enable: true is default
           shouldRetry: (error) => error.status === 401,
-          handler
-        }
-      }
+          handler,
+        },
+      },
     });
 
     await client.get('/test').send();
@@ -75,7 +71,7 @@ describe('RecoveryInterceptor', () => {
 
   test('can disable handler per-request', async () => {
     const handler = jest.fn().mockResolvedValue();
-    
+
     mockFetch.mockResolvedValueOnce(mockError(401, {error: 'Unauthorized'}));
 
     const client = new ApiClient({
@@ -83,18 +79,20 @@ describe('RecoveryInterceptor', () => {
       recovery: {
         auth: {
           shouldRetry: (error) => error.status === 401,
-          handler
-        }
-      }
+          handler,
+        },
+      },
     });
 
     // Disable auth recovery for this request
     await expect(
-      client.get('/public', {
-        recovery: {
-          auth: {enable: false}
-        }
-      }).send()
+      client
+        .get('/public', {
+          recovery: {
+            auth: {enable: false},
+          },
+        })
+        .send()
     ).rejects.toThrow();
 
     expect(handler).not.toHaveBeenCalled();
@@ -103,19 +101,17 @@ describe('RecoveryInterceptor', () => {
   test('deep merges recovery configs', async () => {
     const authHandler = jest.fn().mockResolvedValue();
     const deviceHandler = jest.fn().mockResolvedValue();
-    
-    mockFetch
-      .mockResolvedValueOnce(mockError(403, {error: 'Device not registered'}))
-      .mockResolvedValueOnce(mockSuccess({data: 'success'}));
+
+    mockFetch.mockResolvedValueOnce(mockError(403, {error: 'Device not registered'})).mockResolvedValueOnce(mockSuccess({data: 'success'}));
 
     // Simulate agent config
     const agentConfig = {
       recovery: {
         auth: {
           shouldRetry: (error) => error.status === 401,
-          handler: authHandler
-        }
-      }
+          handler: authHandler,
+        },
+      },
     };
 
     // Client adds device handler
@@ -126,9 +122,9 @@ describe('RecoveryInterceptor', () => {
         ...agentConfig.recovery,
         device: {
           shouldRetry: (error) => error.status === 403,
-          handler: deviceHandler
-        }
-      }
+          handler: deviceHandler,
+        },
+      },
     });
 
     await client.get('/test').send();
@@ -146,8 +142,8 @@ describe('RecoveryInterceptor', () => {
       recovery: {
         incomplete: {
           // Missing shouldRetry, handler, etc.
-        }
-      }
+        },
+      },
     });
 
     // Should not throw - defaults should be populated
@@ -158,24 +154,22 @@ describe('RecoveryInterceptor', () => {
   test('multiple handlers work together', async () => {
     const authHandler = jest.fn().mockResolvedValue();
     const deviceHandler = jest.fn().mockResolvedValue();
-    
+
     // First request: 401
-    mockFetch
-      .mockResolvedValueOnce(mockError(401, {error: 'Unauthorized'}))
-      .mockResolvedValueOnce(mockSuccess({data: 'auth recovered'}));
+    mockFetch.mockResolvedValueOnce(mockError(401, {error: 'Unauthorized'})).mockResolvedValueOnce(mockSuccess({data: 'auth recovered'}));
 
     const client = new ApiClient({
       baseURL: 'https://api.test.com',
       recovery: {
         auth: {
           shouldRetry: (error) => error.status === 401,
-          handler: authHandler
+          handler: authHandler,
         },
         device: {
           shouldRetry: (error) => error.status === 403,
-          handler: deviceHandler
-        }
-      }
+          handler: deviceHandler,
+        },
+      },
     });
 
     await client.get('/test1').send();
@@ -183,9 +177,7 @@ describe('RecoveryInterceptor', () => {
     expect(deviceHandler).not.toHaveBeenCalled();
 
     // Second request: 403
-    mockFetch
-      .mockResolvedValueOnce(mockError(403, {error: 'Device error'}))
-      .mockResolvedValueOnce(mockSuccess({data: 'device recovered'}));
+    mockFetch.mockResolvedValueOnce(mockError(403, {error: 'Device error'})).mockResolvedValueOnce(mockSuccess({data: 'device recovered'}));
 
     await client.get('/test2').send();
     expect(authHandler).toHaveBeenCalledTimes(1); // Still 1

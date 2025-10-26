@@ -2,7 +2,7 @@
 
 import {ApiRequest} from './ApiRequest';
 import {ApiClient} from './ApiClient';
-import {BaseInterceptor} from './interceptors/BaseInterceptor';
+import {BaseInterceptor} from '../interceptors/BaseInterceptor';
 
 describe('ApiRequest', () => {
   let mockFetch;

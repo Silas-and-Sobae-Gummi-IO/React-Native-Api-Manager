@@ -1,7 +1,7 @@
 import {renderHook, act} from '@testing-library/react-native';
 import {useBaseApi} from './useBaseApi';
-import {ApiClient} from '../client/ApiClient';
-import {InterceptorManager} from '../client/lib/InterceptorManager';
+import {ApiClient} from '../client/core/ApiClient';
+import {InterceptorManager} from '../client/managers/InterceptorManager';
 
 describe('useBaseApi', () => {
   let client;

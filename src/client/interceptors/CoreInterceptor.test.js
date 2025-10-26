@@ -1,7 +1,7 @@
 // src/client/interceptors/CoreInterceptor.test.js
 
 import {CoreInterceptor} from './CoreInterceptor';
-import {ApiClient} from '../ApiClient';
+import {ApiClient} from '../core/ApiClient';
 
 describe('CoreInterceptor', () => {
   let mockFetch;

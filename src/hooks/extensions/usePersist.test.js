@@ -1,6 +1,6 @@
 import {renderHook, act} from '@testing-library/react-native';
 import {useCoreApi} from '../useCoreApi';
-import {ApiClient} from '../../client/ApiClient';
+import {ApiClient} from '../../client/core/ApiClient';
 
 // Helper to create proper Response mock
 const mockResponse = (data, options = {}) => ({

@@ -9,7 +9,7 @@ import {MetricsInterceptor} from './MetricsInterceptor';
 import {RateLimitInterceptor} from './RateLimitInterceptor';
 import {RecoveryInterceptor} from './RecoveryInterceptor';
 import {RetryInterceptor} from './RetryInterceptor';
-import {parseResponse} from '../lib/responseParser';
+import {parseResponse} from '../managers/responseParser';
 
 /**
  * CoreInterceptor

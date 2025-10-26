@@ -206,6 +206,26 @@ describe('ConfigManager', () => {
 
       expect(result.body).toBe('raw string');
     });
+
+    it('handles null body overrides without throwing', async () => {
+      const clientConfig = {body: {userId: 123}};
+      const requestConfig = {body: {name: 'John'}};
+      const abortSignal = new AbortController().signal;
+
+      const result = await configManager.prepare(clientConfig, requestConfig, null, abortSignal);
+
+      expect(result.body).toEqual({userId: 123, name: 'John'});
+    });
+
+    it('handles undefined body overrides without throwing', async () => {
+      const clientConfig = {body: {userId: 123}};
+      const requestConfig = {body: {name: 'John'}};
+      const abortSignal = new AbortController().signal;
+
+      const result = await configManager.prepare(clientConfig, requestConfig, undefined, abortSignal);
+
+      expect(result.body).toEqual({userId: 123, name: 'John'});
+    });
   });
 
   describe('Hook System', () => {

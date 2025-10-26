@@ -1,7 +1,7 @@
 // src/client/interceptors/CacheInterceptor.test.js
 
 import {CacheInterceptor} from './CacheInterceptor';
-import {ApiClient} from '../ApiClient';
+import {ApiClient} from '../core/ApiClient';
 
 describe('CacheInterceptor', () => {
   let mockFetch;
@@ -60,13 +60,16 @@ describe('CacheInterceptor', () => {
       const cache = new CacheInterceptor();
       cache._manager = {}; // Mock manager
 
-      const config = cache._normalizeConfig({
-        cache: {
-          enable: true,
-          ttl: 30000,
-          maxSize: 50,
+      const config = cache._normalizeConfig(
+        {
+          cache: {
+            enable: true,
+            ttl: 30000,
+            maxSize: 50,
+          },
         },
-      }, 'cache');
+        'cache'
+      );
 
       expect(config.cache.enable).toBe(true);
       expect(config.cache.ttl).toBe(30000);

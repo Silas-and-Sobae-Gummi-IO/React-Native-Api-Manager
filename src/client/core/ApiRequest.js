@@ -1,7 +1,7 @@
 // src/client/ApiRequest.js
 
-import {buildRequestConfig} from './lib/requestBuilder';
-import {ConfigManager} from './lib/ConfigManager';
+import {buildRequestConfig} from '../managers/requestBuilder';
+import {ConfigManager} from '../managers/ConfigManager';
 
 export class ApiRequest {
   constructor(client, config) {

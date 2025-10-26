@@ -9,7 +9,8 @@ ApiClient → creates → ApiRequest → uses → InterceptorManager → execute
 ```
 
 **Key Files:**
-- `src/client/ApiClient.js` - Public API, request factory (get/post/put/patch/delete/request)
+
+- `src/client/core/ApiClient.js` - Public API, request factory (get/post/put/patch/delete/request)
 - `src/client/ApiRequest.js` - Request executor with lifecycle hooks; context is instance-level (persists across send() calls)
 - `src/client/ApiError.js` - Error with config/response/status
 - `src/client/lib/InterceptorManager.js` - Hook engine with priority-based execution
@@ -23,6 +24,7 @@ ApiClient → creates → ApiRequest → uses → InterceptorManager → execute
 ## Core API
 
 **Constructor:**
+
 ```js
 new ApiClient({
   baseURL?: string,
@@ -37,6 +39,7 @@ new ApiClient({
 ```
 
 **Request Methods:**
+
 ```js
 client.get(url, options?)
 client.post(url, body?, options?)
@@ -47,15 +50,17 @@ client.request('METHOD:/path', body?, options?)  // Shorthand
 ```
 
 **Per-Request Options:**
+
 - `headers`, `params`, `baseURL`, `timeout`, `autoFixJson`, `onStatus`
 - `cancelKey: string` - Auto-cancels previous request with same key (last-one-wins)
 
 **Interceptor Control:**
+
 ```js
-client.interceptors.attach(InterceptorClass)
-client.interceptors.detach(name)
-client.interceptors.add(hookName, name, callback, priority)
-client.interceptors.remove(hookName, name)
+client.interceptors.attach(InterceptorClass);
+client.interceptors.detach(name);
+client.interceptors.add(hookName, name, callback, priority);
+client.interceptors.remove(hookName, name);
 ```
 
 ---
@@ -63,6 +68,7 @@ client.interceptors.remove(hookName, name)
 ## Request Lifecycle & Hooks
 
 **Execution Order:**
+
 1. `request:init` - Early setup (e.g., cancelKey)
 2. `request:defaultConfig` - Add interceptor defaults
 3. `request:clientConfig` - Normalize client config (boolean shorthand)
@@ -83,6 +89,7 @@ client.interceptors.remove(hookName, name)
 18. `request:complete` - Always runs (finally)
 
 **Hook Context:**
+
 ```js
 {
   client: ApiClient,
@@ -100,45 +107,54 @@ client.interceptors.remove(hookName, name)
 ## Built-in Interceptors
 
 **CoreInterceptor** (always attached):
+
 - Registers all built-ins: Logger, StatusHandler, CancelKey, Cache, Metrics, RateLimit, Recovery, Retry
 - Sets `autoFixJson: true`, `Accept: application/json` defaults
 - Wires response parsing via `request:formatData`
 
 **LoggerInterceptor** (priority 900+):
+
 - Logs when `debug.enable === true`
 - Respects `debug.scope` filter
 - Boolean shorthand: `debug: true`
 
 **StatusHandlerInterceptor** (priority 50):
+
 - Executes `onStatus` callbacks at `request:formatResponse`
 - Allows early returns (e.g., 304 cache)
 
 **CancelKeyInterceptor** (priority 1, 999):
+
 - Auto-aborts previous requests with same `cancelKey` (last-one-wins)
 - Hooks: `request:init`, `request:complete`
 
 **CacheInterceptor** (priority 10-999):
+
 - Caches GET with TTL, auto-invalidates on mutations
 - Config: `{ enable, ttl, invalidateOn }`
 - Boolean shorthand: `cache: true`
 
 **RecoveryInterceptor** (priority 40):
+
 - Handles error recovery with custom handlers (auth refresh, device registration, etc.)
 - Config: `{ handlerName: { enable, shouldRetry, handler, abortOnFailure } }`
 - Pauses concurrent requests while handler runs, retries original request on success
 - Hook: `request:formatError` (runs before RetryInterceptor)
 
 **RetryInterceptor** (priority 50):
+
 - Retries on status codes or network errors with backoff
 - Config: `{ enable, maxAttempts, methods, retryOn, backoff: { type, base, jitter } }`
 - Hook: `request:performFetch`
 
 **RateLimitInterceptor** (priority 30):
+
 - Token-bucket queue with sliding/fixed window
 - Config: `{ enable, maxRequests, window, strategy, scope, onRateLimit }`
 - Scope: `global` or `per-endpoint` (origin+pathname)
 
 **MetricsInterceptor** (priority 100):
+
 - Tracks duration, size, status
 - Boolean shorthand: `metrics: true`
 
@@ -148,20 +164,23 @@ client.interceptors.remove(hookName, name)
 
 ```js
 class CustomInterceptor extends BaseInterceptor {
-  static name = 'custom';  // Required
-  static defaultConfig = { enable: false, option: 'value' };  // Optional
-  configKey = 'custom';  // Required
-  
+  static name = 'custom'; // Required
+  static defaultConfig = {enable: false, option: 'value'}; // Optional
+  configKey = 'custom'; // Required
+
   register() {
-    this._useShorthandConfig('custom');  // Enable boolean shorthand
+    this._useShorthandConfig('custom'); // Enable boolean shorthand
     this._manager.add('request:beforeRequest', 'custom:hook', this._method.bind(this), priority);
   }
-  
-  _method(context) { /* ... */ }
+
+  _method(context) {
+    /* ... */
+  }
 }
 ```
 
 **Helpers:**
+
 - `_useShorthandConfig(key)` - Auto-registers boolean shorthand hooks
 - `_getDefaultConfig()` - Returns defaults
 - `_normalizeConfig(config, key)` - Normalizes boolean shorthand
@@ -171,21 +190,25 @@ class CustomInterceptor extends BaseInterceptor {
 ## Key Behaviors
 
 **Config Merge:**
+
 - Deep merge: defaults < client < request
 - Headers merge (set to `undefined` to remove)
 - Body at client-level must be plain object (FormData throws)
 - Boolean shorthand: `cache: true` → `cache: { enable: true, ...defaults }`
 
 **Request Control:**
+
 - Each request has AbortController
 - `request.abort(reason)` cancels request
 - `cancelKey` cancels previous request with same key (last-one-wins)
 
 **File Uploads:**
+
 - Auto-detects React Native file objects `{ uri, name, type }`
 - Creates FormData automatically
 
 **Error Handling:**
+
 - Throws ApiError with `{ message, status, config, response }`
 - `onStatus` handlers can return early or throw custom errors
 - `request:formatError` can return non-error value for recovery (skips onError/suppressError)
@@ -193,6 +216,7 @@ class CustomInterceptor extends BaseInterceptor {
 - Abort errors (AbortError) are never recovered
 
 **Testing:**
+
 - 362 tests passing across all modules
 - Framework: Jest
 
@@ -209,4 +233,4 @@ class CustomInterceptor extends BaseInterceptor {
 
 ---
 
-*For usage examples and migration guides, see `.ai/docs/api-client.md`*
+_For usage examples and migration guides, see `.ai/docs/api-client.md`_

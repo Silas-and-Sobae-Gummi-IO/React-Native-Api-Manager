@@ -1,5 +1,5 @@
 import {useRef} from 'react';
-import {InterceptorManager} from '../client/lib/InterceptorManager';
+import {InterceptorManager} from '../client/managers/InterceptorManager';
 import {useBaseApi} from './useBaseApi';
 import {useRefresh} from './extensions/useRefresh';
 import {usePagination} from './extensions/usePagination';

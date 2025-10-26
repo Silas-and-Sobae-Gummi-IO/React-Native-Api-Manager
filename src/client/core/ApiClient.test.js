@@ -1,8 +1,8 @@
-// src/client/ApiClient.test.js
+// src/client/core/ApiClient.test.js
 
 import {ApiClient} from './ApiClient';
 import {ApiError} from './ApiError';
-import {BaseInterceptor} from './interceptors/BaseInterceptor';
+import {BaseInterceptor} from '../interceptors/BaseInterceptor';
 
 describe('ApiClient', () => {
   let mockFetch;

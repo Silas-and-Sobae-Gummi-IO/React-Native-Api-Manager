@@ -1,6 +1,6 @@
 // src/client/interceptors/RetryInterceptor.test.js
 
-import {ApiClient} from '../ApiClient';
+import {ApiClient} from '../core/ApiClient';
 
 describe('RetryInterceptor', () => {
   let mockFetch;
@@ -11,9 +11,9 @@ describe('RetryInterceptor', () => {
     mockFetch = jest.fn(() => {
       call += 1;
       if (call === 1) {
-        return Promise.resolve({ ok: false, status: 500, headers: new Map([['content-type','application/json']]), text: () => Promise.resolve('{}') });
+        return Promise.resolve({ok: false, status: 500, headers: new Map([['content-type', 'application/json']]), text: () => Promise.resolve('{}')});
       }
-      return Promise.resolve({ ok: true, status: 200, headers: new Map([['content-type','application/json']]), text: () => Promise.resolve('{"ok":true}') });
+      return Promise.resolve({ok: true, status: 200, headers: new Map([['content-type', 'application/json']]), text: () => Promise.resolve('{"ok":true}')});
     });
     global.fetch = mockFetch;
   });
@@ -24,7 +24,7 @@ describe('RetryInterceptor', () => {
   });
 
   it('retries on 500 and succeeds on second attempt (exponential backoff)', async () => {
-    const client = new ApiClient({ retry: { enable: true, maxAttempts: 2, backoff: { type: 'fixed', base: 100, jitter: 'none' } } });
+    const client = new ApiClient({retry: {enable: true, maxAttempts: 2, backoff: {type: 'fixed', base: 100, jitter: 'none'}}});
 
     const p = client.get('https://api.example.com/users').send();
 
@@ -34,16 +34,21 @@ describe('RetryInterceptor', () => {
 
     const data = await p;
     expect(mockFetch).toHaveBeenCalledTimes(2);
-    expect(data).toEqual({ ok: true });
+    expect(data).toEqual({ok: true});
   });
 
   it('does not exceed maxAttempts', async () => {
     // Always 500
-    mockFetch.mockImplementation(() => Promise.resolve({ ok: false, status: 500, headers: new Map([['content-type','application/json']]), text: () => Promise.resolve('{}') }));
+    mockFetch.mockImplementation(() =>
+      Promise.resolve({ok: false, status: 500, headers: new Map([['content-type', 'application/json']]), text: () => Promise.resolve('{}')})
+    );
 
-    const client = new ApiClient({ retry: { enable: true, maxAttempts: 3, backoff: { type: 'fixed', base: 50, jitter: 'none' } } });
+    const client = new ApiClient({retry: {enable: true, maxAttempts: 3, backoff: {type: 'fixed', base: 50, jitter: 'none'}}});
 
-    const p = client.get('https://api.example.com/users').send().catch(e => e);
+    const p = client
+      .get('https://api.example.com/users')
+      .send()
+      .catch((e) => e);
 
     jest.advanceTimersByTime(50);
     await jest.runOnlyPendingTimersAsync();
@@ -60,10 +65,10 @@ describe('RetryInterceptor', () => {
     mockFetch.mockImplementation(() => {
       call += 1;
       if (call === 1) return Promise.reject(new TypeError('Network error'));
-      return Promise.resolve({ ok: true, status: 200, headers: new Map([['content-type','application/json']]), text: () => Promise.resolve('{"ok":true}') });
+      return Promise.resolve({ok: true, status: 200, headers: new Map([['content-type', 'application/json']]), text: () => Promise.resolve('{"ok":true}')});
     });
 
-    const client = new ApiClient({ retry: { enable: true, maxAttempts: 2, backoff: { type: 'fixed', base: 10, jitter: 'none' } } });
+    const client = new ApiClient({retry: {enable: true, maxAttempts: 2, backoff: {type: 'fixed', base: 10, jitter: 'none'}}});
 
     const p = client.get('https://api.example.com/users').send();
     jest.advanceTimersByTime(10);
@@ -71,14 +76,19 @@ describe('RetryInterceptor', () => {
 
     const data = await p;
     expect(mockFetch).toHaveBeenCalledTimes(2);
-    expect(data).toEqual({ ok: true });
+    expect(data).toEqual({ok: true});
   });
 
   it('respects allowed methods (no POST by default)', async () => {
-    mockFetch.mockImplementation(() => Promise.resolve({ ok: false, status: 500, headers: new Map([['content-type','application/json']]), text: () => Promise.resolve('{}') }));
-    const client = new ApiClient({ retry: { enable: true, maxAttempts: 2, backoff: { type: 'fixed', base: 10, jitter: 'none' } } });
+    mockFetch.mockImplementation(() =>
+      Promise.resolve({ok: false, status: 500, headers: new Map([['content-type', 'application/json']]), text: () => Promise.resolve('{}')})
+    );
+    const client = new ApiClient({retry: {enable: true, maxAttempts: 2, backoff: {type: 'fixed', base: 10, jitter: 'none'}}});
 
-    const p = client.post('https://api.example.com/users', {name:'a'}).send().catch(e => e);
+    const p = client
+      .post('https://api.example.com/users', {name: 'a'})
+      .send()
+      .catch((e) => e);
 
     // Even if we advance timers, should not retry POST
     jest.advanceTimersByTime(1000);
@@ -94,11 +104,14 @@ describe('RetryInterceptor', () => {
     let call = 0;
     mockFetch.mockImplementation(() => {
       call += 1;
-      if (call === 1) return Promise.resolve({ ok: false, status: 418, headers: new Map([['content-type','application/json']]), text: () => Promise.resolve('{}') });
-      return Promise.resolve({ ok: true, status: 200, headers: new Map([['content-type','application/json']]), text: () => Promise.resolve('{"ok":true}') });
+      if (call === 1)
+        return Promise.resolve({ok: false, status: 418, headers: new Map([['content-type', 'application/json']]), text: () => Promise.resolve('{}')});
+      return Promise.resolve({ok: true, status: 200, headers: new Map([['content-type', 'application/json']]), text: () => Promise.resolve('{"ok":true}')});
     });
 
-    const client = new ApiClient({ retry: { enable: true, maxAttempts: 2, retryOn: (resp) => resp.status === 418, backoff: { type: 'fixed', base: 10, jitter: 'none' } } });
+    const client = new ApiClient({
+      retry: {enable: true, maxAttempts: 2, retryOn: (resp) => resp.status === 418, backoff: {type: 'fixed', base: 10, jitter: 'none'}},
+    });
 
     const p = client.get('https://api.example.com/t').send();
     jest.advanceTimersByTime(10);
@@ -106,6 +119,6 @@ describe('RetryInterceptor', () => {
     const data = await p;
 
     expect(mockFetch).toHaveBeenCalledTimes(2);
-    expect(data).toEqual({ ok: true });
+    expect(data).toEqual({ok: true});
   });
 });

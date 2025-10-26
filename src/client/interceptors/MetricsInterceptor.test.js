@@ -1,7 +1,7 @@
 // src/client/interceptors/MetricsInterceptor.test.js
 
 import {MetricsInterceptor} from './MetricsInterceptor';
-import {ApiClient} from '../ApiClient';
+import {ApiClient} from '../core/ApiClient';
 
 describe('MetricsInterceptor', () => {
   let mockFetch;

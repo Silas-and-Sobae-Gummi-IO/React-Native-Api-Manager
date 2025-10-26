@@ -1,7 +1,7 @@
 // src/client/interceptors/LoggerInterceptor.test.js
 
 import {LoggerInterceptor} from './LoggerInterceptor';
-import {ApiClient} from '../ApiClient';
+import {ApiClient} from '../core/ApiClient';
 
 describe('LoggerInterceptor', () => {
   let mockFetch;
@@ -40,7 +40,7 @@ describe('LoggerInterceptor', () => {
     it('sets default debug config with enable=false and scope=*', async () => {
       const client = new ApiClient();
       const logger = client.interceptors.providers.get('logger');
-      
+
       const defaultConfig = logger._getDefaultConfig();
 
       // Logger should define default config
@@ -60,13 +60,8 @@ describe('LoggerInterceptor', () => {
 
       await request.send();
 
-      expect(consoleLogSpy).toHaveBeenCalledWith(
-        expect.stringContaining('[API beforeFetch] GET -> https://api.example.com/users')
-      );
-      expect(consoleLogSpy).toHaveBeenCalledWith(
-        expect.stringContaining('[API Response] success'),
-        expect.objectContaining({ok: true})
-      );
+      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('[API beforeFetch] GET -> https://api.example.com/users'));
+      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('[API Response] success'), expect.objectContaining({ok: true}));
     });
 
     it('does not log when debug.enable is false', async () => {
@@ -84,7 +79,7 @@ describe('LoggerInterceptor', () => {
       const client = new ApiClient({
         interceptors: ['-logger'], // Disable default logger
       });
-      
+
       // Manually attach logger but no debug config
       client.interceptors.attach(LoggerInterceptor);
       const request = client.get('https://api.example.com/users');
@@ -93,13 +88,13 @@ describe('LoggerInterceptor', () => {
 
       // Logger sets defaults, so it will actually log. Let's test the _shouldLog logic directly
       const logger = client.interceptors.providers.get('logger');
-      
+
       // Mock client config to have no debug
       const oldConfig = client.config;
       client.config = {};
-      
+
       expect(logger._shouldLog()).toBe(false);
-      
+
       client.config = oldConfig;
     });
 
@@ -111,9 +106,7 @@ describe('LoggerInterceptor', () => {
 
       await request.send();
 
-      expect(consoleLogSpy).toHaveBeenCalledWith(
-        expect.stringContaining('[API beforeFetch] POST -> https://api.example.com/users')
-      );
+      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('[API beforeFetch] POST -> https://api.example.com/users'));
     });
 
     it('logs error responses correctly', async () => {
@@ -135,10 +128,7 @@ describe('LoggerInterceptor', () => {
         // Expected to throw
       }
 
-      expect(consoleLogSpy).toHaveBeenCalledWith(
-        expect.stringContaining('[API Response] error'),
-        expect.objectContaining({ok: false})
-      );
+      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('[API Response] error'), expect.objectContaining({ok: false}));
     });
   });
 
@@ -190,7 +180,7 @@ describe('LoggerInterceptor', () => {
       const logger = new LoggerInterceptor();
       // Don't need to call init, just test the _normalizeConfig helper directly
       logger._manager = {}; // Mock manager (not used in this test)
-      
+
       // Test with user config that has debug.enable = false
       const config = logger._normalizeConfig({debug: {enable: false}}, 'debug');
 
@@ -203,7 +193,7 @@ describe('LoggerInterceptor', () => {
     it('normalizes boolean shorthand to object', () => {
       const logger = new LoggerInterceptor();
       logger._manager = {}; // Mock manager (not used in this test)
-      
+
       // Test debug: true shorthand
       const config1 = logger._normalizeConfig({debug: true}, 'debug');
       expect(config1.debug).toEqual({
@@ -223,7 +213,7 @@ describe('LoggerInterceptor', () => {
   describe('Edge cases', () => {
     it('handles missing client gracefully', () => {
       const logger = new LoggerInterceptor(null, null);
-      
+
       expect(logger._shouldLog()).toBe(false);
     });
 
@@ -242,10 +232,7 @@ describe('LoggerInterceptor', () => {
 
       await request.send();
 
-      expect(consoleLogSpy).toHaveBeenCalledWith(
-        expect.stringContaining('[API Response]'),
-        expect.any(Object)
-      );
+      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('[API Response]'), expect.any(Object));
     });
   });
 });

@@ -1,5 +1,5 @@
 import {ApiAgent} from './ApiAgent';
-import {ApiClient} from '../client/ApiClient';
+import {ApiClient} from '../client/core/ApiClient';
 import {BaseInterceptor} from '../client/interceptors/BaseInterceptor';
 
 describe('ApiAgent', () => {
